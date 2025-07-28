@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  mosquitto:
+    build: .
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # Puerto MQTT
+      #- "9001:9001"   # Puerto WebSocket (descomentar si se usa)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
