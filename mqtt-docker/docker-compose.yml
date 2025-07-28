@@ -6,8 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "1883:1883"   # Puerto MQTT
-      #- "9001:9001"   # Puerto WebSocket (descomentar si se usa)
+      # - "9001:9001"  # Puerto WebSocket (descomentar si se usa)
     volumes:
-      - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log

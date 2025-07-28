@@ -38,3 +38,109 @@
 1753730353: Config loaded from /mosquitto/config/mosquitto.conf.
 1753730353: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
 1753730353: Error opening password file "/mosquitto/config/passwordfile".
+1753730665: mosquitto version 2.0.22 starting
+1753730665: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730665: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730665: Error opening password file "/mosquitto/config/passwordfile".
+1753730666: mosquitto version 2.0.22 starting
+1753730666: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730666: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730666: Error opening password file "/mosquitto/config/passwordfile".
+1753730666: mosquitto version 2.0.22 starting
+1753730666: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730666: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730666: Error opening password file "/mosquitto/config/passwordfile".
+1753730667: mosquitto version 2.0.22 starting
+1753730667: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730667: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730667: Error opening password file "/mosquitto/config/passwordfile".
+1753730668: mosquitto version 2.0.22 starting
+1753730668: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730668: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730668: Error opening password file "/mosquitto/config/passwordfile".
+1753730670: mosquitto version 2.0.22 starting
+1753730670: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730670: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730670: Error opening password file "/mosquitto/config/passwordfile".
+1753730673: mosquitto version 2.0.22 starting
+1753730673: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730673: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730673: Error opening password file "/mosquitto/config/passwordfile".
+1753730680: mosquitto version 2.0.22 starting
+1753730680: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730680: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730680: Error opening password file "/mosquitto/config/passwordfile".
+1753730693: mosquitto version 2.0.22 starting
+1753730693: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730693: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730693: Error opening password file "/mosquitto/config/passwordfile".
+1753730773: mosquitto version 2.0.22 starting
+1753730773: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730773: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730773: Error opening password file "/mosquitto/config/passwordfile".
+1753730773: mosquitto version 2.0.22 starting
+1753730773: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730773: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730773: Error opening password file "/mosquitto/config/passwordfile".
+1753730773: mosquitto version 2.0.22 starting
+1753730773: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730773: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730773: Error opening password file "/mosquitto/config/passwordfile".
+1753730774: mosquitto version 2.0.22 starting
+1753730774: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730774: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730774: Error opening password file "/mosquitto/config/passwordfile".
+1753730775: mosquitto version 2.0.22 starting
+1753730775: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730775: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730775: Error opening password file "/mosquitto/config/passwordfile".
+1753730777: mosquitto version 2.0.22 starting
+1753730777: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730777: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730777: Error opening password file "/mosquitto/config/passwordfile".
+1753730780: mosquitto version 2.0.22 starting
+1753730780: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730780: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730780: Error opening password file "/mosquitto/config/passwordfile".
+1753730787: mosquitto version 2.0.22 starting
+1753730787: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730787: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730787: Error opening password file "/mosquitto/config/passwordfile".
+1753730800: mosquitto version 2.0.22 starting
+1753730800: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730800: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730800: Error opening password file "/mosquitto/config/passwordfile".
+1753730826: mosquitto version 2.0.22 starting
+1753730826: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730826: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730826: Error opening password file "/mosquitto/config/passwordfile".
+1753730877: mosquitto version 2.0.22 starting
+1753730877: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730877: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730877: Error opening password file "/mosquitto/config/passwordfile".
+1753730938: mosquitto version 2.0.22 starting
+1753730938: Config loaded from /mosquitto/config/mosquitto.conf.
+1753730938: Error: Unable to open pwfile "/mosquitto/config/passwordfile".
+1753730938: Error opening password file "/mosquitto/config/passwordfile".
+1753731080: mosquitto version 2.0.22 starting
+1753731080: Config loaded from /mosquitto/config/mosquitto.conf.
+1753731080: Opening ipv4 listen socket on port 1883.
+1753731080: Opening ipv6 listen socket on port 1883.
+1753731080: mosquitto version 2.0.22 running
+1753731092: mosquitto version 2.0.22 terminating
+1753731092: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1753731101: mosquitto version 2.0.22 starting
+1753731101: Config loaded from /mosquitto/config/mosquitto.conf.
+1753731101: Opening ipv4 listen socket on port 1883.
+1753731101: Opening ipv6 listen socket on port 1883.
+1753731101: mosquitto version 2.0.22 running
+1753731257: New connection from ::1:54676 on port 1883.
+1753731257: New client connected from ::1:54676 as auto-0D989705-5189-ABE1-898C-0E6465341516 (p2, c1, k60, u'admin').
+1753731336: New connection from 192.168.1.144:58745 on port 1883.
+1753731336: Client auto-CC50CC79-02B8-9202-8D28-C7F042579AD7 disconnected, not authorised.
+1753731344: New connection from 192.168.1.144:58748 on port 1883.
+1753731344: New client connected from 192.168.1.144:58748 as auto-AEF9E6DF-6DDA-89E0-C43E-10B47D3FDC72 (p2, c1, k60, u'admin').
+1753731344: Client auto-AEF9E6DF-6DDA-89E0-C43E-10B47D3FDC72 disconnected.
+1753731443: Client auto-0D989705-5189-ABE1-898C-0E6465341516 disconnected.
+1753731453: mosquitto version 2.0.22 terminating
+1753731453: Saving in-memory database to /mosquitto/data//mosquitto.db.
