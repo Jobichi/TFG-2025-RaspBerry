@@ -1,0 +1,32 @@
+services:
+  mosquitto:
+    build: 
+      context: ./mqtt-docker
+      dockerfile: Dockerfile
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # Puerto MQTT
+      # - "9001:9001"  # Puerto WebSocket (descomentar si se usa)
+    volumes:
+      - ./mqtt-docker/mosquitto/data:/mosquitto/data
+      - ./mqtt-docker/mosquitto/log:/mosquitto/log
+    networks:
+      - tfg_net
+
+  telegram-bot:
+    build: 
+      context: ./telegram-docker
+      dockerfile: Dockerfile
+    container_name: telegram
+    restart: unless-stopped
+    env_file:
+      - ./telegram-docker/telegram-bot/config.env
+    depends_on:
+      - mosquitto
+    networks:
+      - tfg_net
+
+networks:
+  tfg_net:
+    driver: bridge

@@ -144,3 +144,13 @@
 1753731443: Client auto-0D989705-5189-ABE1-898C-0E6465341516 disconnected.
 1753731453: mosquitto version 2.0.22 terminating
 1753731453: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1753808225: mosquitto version 2.0.22 starting
+1753808225: Config loaded from /mosquitto/config/mosquitto.conf.
+1753808225: Opening ipv4 listen socket on port 1883.
+1753808225: Opening ipv6 listen socket on port 1883.
+1753808225: mosquitto version 2.0.22 running
+1753808287: mosquitto version 2.0.22 starting
+1753808287: Config loaded from /mosquitto/config/mosquitto.conf.
+1753808287: Opening ipv4 listen socket on port 1883.
+1753808287: Opening ipv6 listen socket on port 1883.
+1753808287: mosquitto version 2.0.22 running
