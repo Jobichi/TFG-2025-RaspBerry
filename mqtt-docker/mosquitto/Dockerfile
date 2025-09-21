@@ -5,6 +5,6 @@ COPY config/mosquitto.conf /mosquitto/config/mosquitto.conf
 COPY passwordfile /mosquitto/config/passwordfile
 
 # Ajustamos permisos y propietario
-RUN chmod 600 /config/passwordfile && \
-    chmod 644 /config/mosquitto.conf && \
-    chown -R mosquitto:mosquitto /config
+RUN chmod 600 /mosquitto/config/passwordfile && \
+    chmod 644 /mosquitto/config/mosquitto.conf && \
+    chown -R mosquitto:mosquitto /mosquitto/config
