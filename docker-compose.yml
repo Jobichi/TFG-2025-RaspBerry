@@ -1,7 +1,7 @@
 services:
   mosquitto:
     build: 
-      context: ./mqtt-docker
+      context: ./mqtt-docker/mosquitto
       dockerfile: Dockerfile
     container_name: mosquitto
     restart: unless-stopped
@@ -11,6 +11,15 @@ services:
     volumes:
       - ./mqtt-docker/mosquitto/data:/mosquitto/data
       - ./mqtt-docker/mosquitto/log:/mosquitto/log
+    networks:
+      - tfg_net
+
+  pong-service:
+    build: ./mqtt-docker/services/pong-service
+    container_name: pong-service
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
     networks:
       - tfg_net
 
