@@ -7,4 +7,5 @@ RUN pip install paho-mqtt
 
 COPY pong.py /app/
 
-CMD ["python", "pong.py"]
+# Ejecución en modo "unbuffered" (-u) para que los print salgan al log
+CMD ["python", "-u", "pong.py"]
