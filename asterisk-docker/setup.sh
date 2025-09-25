@@ -7,7 +7,7 @@ if [ ! -f ".env.gpg" ]; then
 fi
 
 echo "[INFO] Introduce la contraseña para desencriptar .env:"
-gpg --quiet --batch --yes -d .env.gpg > .env || {
+gpg -d .env.gpg > .env || {
   echo "[ERROR] Contraseña incorrecta o fallo al desencriptar"
   exit 1
 }
