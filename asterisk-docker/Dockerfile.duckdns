@@ -1,0 +1,5 @@
+FROM alpine:latest
+RUN apk add --no-cache curl bash
+COPY duck.sh /duck.sh
+RUN chmod +x /duck.sh
+CMD while true; do /duck.sh; sleep 300; done
