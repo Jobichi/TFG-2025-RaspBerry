@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  asterisk:
+    build:
+      context: .
+      dockerfile: Dockerfile.asterisk-basic
+    container_name: asterisk-basic
+    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "8088:8088"
+      - "10000-20000:10000-20000/udp"
+    volumes:
+      - ./asterisk/etc:/etc/asterisk
+      - ./asterisk/var:/var/lib/asterisk
+      - ./asterisk/log:/var/log/asterisk
