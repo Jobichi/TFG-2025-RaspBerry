@@ -15,5 +15,5 @@ gpg -d .env.gpg > .env || {
 echo "[INFO] Lanzando Docker Compose..."
 sudo docker compose up -d --build
 
-rm -f .env
-echo "[OK] Despliegue completado y .env eliminado"
+chmod 600 .env
+echo "[OK] Despliegue completado, .env preservado para futuros down/restart"
