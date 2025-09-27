@@ -1,26 +1,42 @@
+# Imagen base ligera
 FROM debian:bullseye-slim
 
-LABEL maintainer="TuNombre <tuemail@ejemplo.com>"
+# Variables de entorno
+ENV ASTERISK_VERSION=20.7.0
 
-# Evitar prompts en apt
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Instalar dependencias mínimas + Asterisk
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      asterisk \
-      asterisk-core-sounds-en \
-      asterisk-moh-opsound-wav \
-      curl \
-      nano \
-      procps \
+# Instalar dependencias mínimas
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    wget \
+    curl \
+    gnupg \
+    libssl-dev \
+    libncurses5-dev \
+    libjansson-dev \
+    libxml2-dev \
+    uuid-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Directorio de trabajo
-WORKDIR /etc/asterisk
+# Descargar y compilar Asterisk
+WORKDIR /usr/src
+RUN wget http://downloads.asterisk.org/pub/telephony/asterisk/asterisk-${ASTERISK_VERSION}.tar.gz \
+    && tar xvf asterisk-${ASTERISK_VERSION}.tar.gz \
+    && rm asterisk-${ASTERISK_VERSION}.tar.gz \
+    && cd asterisk-${ASTERISK_VERSION} \
+    && contrib/scripts/get_mp3_source.sh \
+    && ./configure --with-jansson-bundled \
+    && make menuselect.makeopts \
+    && menuselect/menuselect \
+         --enable CORE-SOUNDS-EN-GSM \
+         --enable FORMAT_MP3 \
+         menuselect.makeopts \
+    && make -j$(nproc) \
+    && make install \
+    && make samples \
+    && make config
 
-# Exponer puertos (SIP + HTTP + RTP)
-EXPOSE 5060/udp 5060/tcp 8088 10000-20000/udp
+# Exponer puertos SIP y WebRTC
+EXPOSE 5060/udp 5060/tcp 8088/tcp
 
-# Ejecutar Asterisk en primer plano
-CMD ["asterisk", "-f", "-U", "root"]
+# Punto de entrada
+CMD ["/usr/sbin/asterisk", "-f", "-U", "root"]
