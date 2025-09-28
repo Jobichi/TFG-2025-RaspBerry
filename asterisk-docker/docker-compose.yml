@@ -2,10 +2,19 @@ services:
   asterisk:
     build:
       context: .
-      dockerfile: Dockerfile.asterisk-basic
-    container_name: asterisk-basic
-    network_mode: host   # importante para SIP
-    volumes:
-      - ./etc/asterisk:/etc/asterisk
-      - ./var/lib/asterisk:/var/lib/asterisk
+      dockerfile: Dockerfile.asterisk
+    container_name: asterisk
     restart: unless-stopped
+    ports:
+      - "5060:5060/udp"              # SIP
+      - "5061:5061/tcp"              # SIP-TLS
+      - "10000-10019:10000-10019/udp" # RTP (voz)
+    volumes:
+      - ./aterisk/config:/etc/asterisk       # Configuración persistente
+      - ./aterisk/logs:/var/log/asterisk     # Logs persistentes
+    networks:
+      - asterisk-net
+
+networks:
+  asterisk-net:
+    driver: bridge

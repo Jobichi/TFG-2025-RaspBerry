@@ -1,0 +1,15 @@
+FROM debian:bullseye-slim
+
+# Instalar Asterisk con las mínimas dependencias
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      asterisk \
+      asterisk-dev \
+      asterisk-config \
+      && apt-get clean \
+      && rm -rf /var/lib/apt/lists/*
+
+# Exponer puertos necesarios
+EXPOSE 5060/udp 5061/tcp 10000-20000/udp
+
+# Arrancar en primer plano
+CMD ["asterisk", "-f"]
