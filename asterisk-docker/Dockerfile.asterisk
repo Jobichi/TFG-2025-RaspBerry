@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       && rm -rf /var/lib/apt/lists/*
 
 # Exponer puertos necesarios
-EXPOSE 5060/udp 5061/tcp 10000-20000/udp
+EXPOSE 5060/udp 5061/tcp 10000-10019/udp
 
 # Arrancar en primer plano
 CMD ["asterisk", "-f"]

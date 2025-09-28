@@ -10,8 +10,8 @@ services:
       - "5061:5061/tcp"              # SIP-TLS
       - "10000-10019:10000-10019/udp" # RTP (voz)
     volumes:
-      - ./aterisk/config:/etc/asterisk       # Configuración persistente
-      - ./aterisk/logs:/var/log/asterisk     # Logs persistentes
+      - ./asterisk/config:/etc/asterisk       # Configuración persistente
+      - ./asterisk/logs:/var/log/asterisk     # Logs persistentes
     networks:
       - asterisk-net
 
