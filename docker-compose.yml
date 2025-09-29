@@ -1,21 +1,27 @@
+version: "3.8"
+
 services:
+  # === BROKER MQTT ===
   mosquitto:
     build: 
-      context: ./mqtt-docker/mosquitto
-      dockerfile: Dockerfile
+      context: ./mqtt-docker
+      dockerfile: Dockerfile.mosquitto
     container_name: mosquitto
     restart: unless-stopped
     ports:
       - "1883:1883"   # Puerto MQTT
-      # - "9001:9001"  # Puerto WebSocket (descomentar si se usa)
+      # - "9001:9001"  # Puerto WebSocket (opcional)
     volumes:
       - ./mqtt-docker/mosquitto/data:/mosquitto/data
       - ./mqtt-docker/mosquitto/log:/mosquitto/log
     networks:
       - tfg_net
 
+  # === SERVICIO PONG (TEST MQTT) ===
   pong-service:
-    build: ./mqtt-docker/services/pong-service
+    build:
+      context: ./services/pong-service
+      dockerfile: Dockerfile.pong
     container_name: pong-service
     restart: unless-stopped
     depends_on:
@@ -23,10 +29,11 @@ services:
     networks:
       - tfg_net
 
+  # === TELEGRAM BOT ===
   telegram-bot:
     build: 
       context: ./telegram-docker
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.telegram
     container_name: telegram
     restart: unless-stopped
     env_file:
@@ -35,6 +42,37 @@ services:
       - mosquitto
     networks:
       - tfg_net
+
+  # === ASTERISK ===
+  asterisk:
+    build:
+      context: ./asterisk-docker
+      dockerfile: Dockerfile.asterisk
+    container_name: asterisk
+    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"              # SIP
+      - "5061:5061/tcp"              # SIP-TLS
+      - "10000-10019:10000-10019/udp" # RTP (voz)
+    volumes:
+      - ./asterisk-docker/asterisk/config:/etc/asterisk
+      - ./asterisk-docker/asterisk/logs:/var/log/asterisk
+    networks:
+      - tfg_net
+
+  # === FUTURO: WHISPER/VOSK SERVICE ===
+  # whisper:
+  #   build: ./whisper-service
+  #   container_name: whisper
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./asterisk-docker/asterisk/whisper:/var/spool/asterisk/whisper
+  #     - ./whisper-service/command-map.json:/app/command-map.json
+  #   depends_on:
+  #     - asterisk
+  #     - mosquitto
+  #   networks:
+  #     - tfg_net
 
 networks:
   tfg_net:
