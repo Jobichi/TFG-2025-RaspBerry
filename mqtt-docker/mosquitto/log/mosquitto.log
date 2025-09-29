@@ -1,0 +1,10 @@
+1759172283: mosquitto version 2.0.22 starting
+1759172283: Config loaded from /mosquitto/config/mosquitto.conf.
+1759172283: Opening ipv4 listen socket on port 1883.
+1759172283: Opening ipv6 listen socket on port 1883.
+1759172283: mosquitto version 2.0.22 running
+1759172285: New connection from 172.19.0.4:57641 on port 1883.
+1759172285: New client connected from 172.19.0.4:57641 as auto-88AA1022-1216-645F-3269-88AE7EB5C1BF (p2, c1, k60, u'admin').
+1759172368: Client auto-88AA1022-1216-645F-3269-88AE7EB5C1BF closed its connection.
+1759172369: mosquitto version 2.0.22 terminating
+1759172369: Saving in-memory database to /mosquitto/data//mosquitto.db.

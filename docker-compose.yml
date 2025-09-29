@@ -3,7 +3,7 @@ version: "3.8"
 services:
   # === BROKER MQTT ===
   mosquitto:
-    build: 
+    build:
       context: ./mqtt-docker
       dockerfile: Dockerfile.mosquitto
     container_name: mosquitto
@@ -31,13 +31,13 @@ services:
 
   # === TELEGRAM BOT ===
   telegram-bot:
-    build: 
+    build:
       context: ./telegram-docker
       dockerfile: Dockerfile.telegram
     container_name: telegram
     restart: unless-stopped
     env_file:
-      - ./env
+      - ./.env
     depends_on:
       - mosquitto
     networks:
