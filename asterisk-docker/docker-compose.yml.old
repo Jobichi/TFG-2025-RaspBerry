@@ -1,42 +1,20 @@
 services:
   asterisk:
-    image: asterisk/asterisk:20
-    container_name: asterisk
-    restart: unless-stopped
-    network_mode: service:wireguard
-    volumes:
-      - ./asterisk/etc:/etc/asterisk
-      - ./asterisk/var:/var/lib/asterisk
-      - ./asterisk/log:/var/log/asterisk
-
-  wireguard:
-    image: linuxserver/wireguard
-    container_name: wireguard
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Madrid
-      - SERVERURL=${DUCKDNS_DOMAIN}.duckdns.org
-      - SERVERPORT=51820
-      - PEERS=phone,pc
-      - PEERDNS=1.1.1.1
-      - INTERNAL_SUBNET=10.13.13.0/24
-    ports:
-      - 51820:51820/udp
-    volumes:
-      - ./wireguard:/config
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-    restart: unless-stopped
-
-  duckdns:
     build:
       context: .
-      dockerfile: Dockerfile.duckdns
-    container_name: duckdns
+      dockerfile: Dockerfile.asterisk
+    container_name: asterisk
     restart: unless-stopped
-    env_file:
-      - .env
+    ports:
+      - "5060:5060/udp"              # SIP
+      - "5061:5061/tcp"              # SIP-TLS
+      - "10000-10019:10000-10019/udp" # RTP (voz)
+    volumes:
+      - ./asterisk/config:/etc/asterisk       # Configuración persistente
+      - ./asterisk/logs:/var/log/asterisk     # Logs persistentes
+    networks:
+      - asterisk-net
+
+networks:
+  asterisk-net:
+    driver: bridge
