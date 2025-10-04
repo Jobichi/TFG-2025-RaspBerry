@@ -15,7 +15,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - ./services/mariadb-service:/var/lib/mysql
-    # Para desarrollo puedes exponerlo; en prod, mejor quitar este puerto
+      - ./services/mariadb-service/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "3306:3306"
     networks:
