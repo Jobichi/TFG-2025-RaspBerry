@@ -1,23 +1,14 @@
 FROM eclipse-mosquitto:2.0
 
-# Variables pasadas desde docker-compose
-ARG MQTT_USER
-ARG MQTT_PASS
-
-# Generar archivo de contraseñas dentro del contenedor
-RUN mosquitto_passwd -c -b /mosquitto/config/passwordfile $MQTT_USER $MQTT_PASS && \
-    chmod 600 /mosquitto/config/passwordfile && \
-    chown mosquitto:mosquitto /mosquitto/config/passwordfile
-
-# Copiar configuración personalizada
+# Copiamos un mosquitto.conf "semilla" por si el volumen no lo trae
 COPY config/mosquitto.conf /mosquitto/config/mosquitto.conf
 
-# Ajustar permisos de la configuración
-RUN chmod 644 /mosquitto/config/mosquitto.conf && \
-    chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf
+# Entrypoint que genera passwordfile en runtime desde las env vars
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh && chown -R mosquitto:mosquitto /mosquitto
 
-# Exponer puertos MQTT estándar
-EXPOSE 1883
-EXPOSE 9001
+# La imagen oficial ya ejecuta como usuario 'mosquitto'
+USER mosquitto
 
-# Usar el entrypoint de la imagen oficial (no lo sobrescribimos)
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/usr/sbin/mosquitto","-c","/mosquitto/config/mosquitto.conf"]
