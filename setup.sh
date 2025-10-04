@@ -1,9 +1,13 @@
 #!/bin/bash
 set -e
 
-# Ruta del .env cifrado
+# --- Variables ---
 ENV_FILE=".env"
 ENV_GPG_FILE=".env.gpg"
+
+MQTT_PATH="./mqtt-docker"
+MQTT_UID=1883
+MQTT_GID=1883
 
 # --- Funciones auxiliares ---
 check_and_install_docker() {
@@ -29,6 +33,22 @@ check_and_install_docker_compose_plugin() {
     fi
 }
 
+fix_mosquitto_permissions() {
+    echo "[INFO] Ajustando permisos para Mosquitto..."
+    for dir in config data log; do
+        local target="${MQTT_PATH}/${dir}"
+        if [ -d "$target" ]; then
+            sudo chown -R ${MQTT_UID}:${MQTT_GID} "$target"
+            echo "   → Permisos corregidos en $target"
+        else
+            echo "   → Creando directorio $target"
+            mkdir -p "$target"
+            sudo chown -R ${MQTT_UID}:${MQTT_GID} "$target"
+        fi
+    done
+    echo "[INFO] Permisos de Mosquitto corregidos correctamente."
+}
+
 # --- 1. Comprobar dependencias ---
 check_and_install_docker
 check_and_install_docker_compose_plugin
@@ -46,10 +66,20 @@ else
     exit 1
 fi
 
-# --- 3. Levantar contenedores ---
-echo "[INFO] Levantando contenedores con build..."
-docker compose up --build -d
+# --- 3. Preparar entorno de Mosquitto ---
+fix_mosquitto_permissions
 
-# --- 4. Mostrar estado ---
+# --- 4. Levantar contenedores ---
+echo "[INFO] Levantando contenedores con build..."
+docker compose build --no-cache
+docker compose up -d
+
+# --- 5. Mostrar estado ---
 echo "[INFO] Contenedores en ejecución:"
 docker ps
+
+# --- 6. Mensaje final ---
+echo ""
+echo "[OK] Despliegue completado."
+echo "Puedes probar MQTT con:"
+echo "  mosquitto_sub -h 127.0.0.1 -p 1883 -t 'announce/#' -u \$MQTT_USER -P \$MQTT_PASS -v"

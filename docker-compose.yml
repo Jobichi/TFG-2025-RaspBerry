@@ -1,19 +1,47 @@
 version: "3.8"
 
 services:
-  # === BROKER MQTT ===
+  # === MARIADB ===
+  mariadb-service:
+    image: mariadb:11
+    container_name: mariadb-service
+    restart: always
+    env_file:
+      - ./.env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ./services/mariadb-service:/var/lib/mysql
+    # Para desarrollo puedes exponerlo; en prod, mejor quitar este puerto
+    ports:
+      - "3306:3306"
+    networks:
+      - tfg_net
+
+  # === BROKER MQTT (MOSQUITTO) ===
   mosquitto:
     build:
       context: ./mqtt-docker
       dockerfile: Dockerfile.mosquitto
     container_name: mosquitto
     restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
+      # Descomenta temporalmente para regenerar el passwordfile
+      # MQTT_FORCE_REGEN: "1"
     ports:
-      - "1883:1883"   # Puerto MQTT
-      # - "9001:9001"  # Puerto WebSocket (opcional)
+      - "1883:1883"
+      # - "9001:9001"
     volumes:
-      - ./mqtt-docker/mosquitto/data:/mosquitto/data
-      - ./mqtt-docker/mosquitto/log:/mosquitto/log
+      - ./mqtt-docker/config:/mosquitto/config
+      - ./mqtt-docker/data:/mosquitto/data
+      - ./mqtt-docker/log:/mosquitto/log
     networks:
       - tfg_net
 
@@ -24,12 +52,46 @@ services:
       dockerfile: Dockerfile.pong
     container_name: pong-service
     restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      # Conecta contra el broker en la red interna
+      MQTT_HOST: mosquitto
+      MQTT_PORT: ${MQTT_PORT}
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
     depends_on:
       - mosquitto
     networks:
       - tfg_net
 
-  # === TELEGRAM BOT ===
+  # === LISTENER (PERSISTE announce/# EN LA DB) ===
+  mqtt-listener:
+    build:
+      context: ./services/mqtt-listener
+    container_name: mqtt-listener
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      # DB: usa el nombre del servicio como host
+      DB_HOST: mariadb-service
+      DB_USER: ${MYSQL_USER}
+      DB_PASS: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE}
+      # MQTT
+      MQTT_HOST: mosquitto
+      MQTT_PORT: ${MQTT_PORT}
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
+      MQTT_TOPIC: announce/#   # por si lo quieres parametrizar
+    depends_on:
+      - mariadb-service
+      - mosquitto
+    networks:
+      - tfg_net
+
+  # === TELEGRAM BOT (LECTOR DE LA DB) ===
   telegram-bot:
     build:
       context: ./telegram-docker
@@ -38,8 +100,21 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env
+    environment:
+      # DB
+      DB_HOST: mariadb-service
+      DB_USER: ${MYSQL_USER}
+      DB_PASS: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE}
+      # (Si tu bot también necesita tocar MQTT, deja estas)
+      MQTT_HOST: mosquitto
+      MQTT_PORT: ${MQTT_PORT}
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
+      # TOKEN de Telegram también sale del .env (TELEGRAM_BOT_TOKEN)
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
     depends_on:
-      - mosquitto
+      - mariadb-service
     networks:
       - tfg_net
 
@@ -51,9 +126,9 @@ services:
     container_name: asterisk
     restart: unless-stopped
     ports:
-      - "5060:5060/udp"              # SIP
-      - "5061:5061/tcp"              # SIP-TLS
-      - "10000-10019:10000-10019/udp" # RTP (voz)
+      - "5060:5060/udp"                # SIP
+      - "5061:5061/tcp"                # SIP-TLS
+      - "10000-10019:10000-10019/udp"  # RTP (voz)
     volumes:
       - ./asterisk-docker/asterisk/config:/etc/asterisk
       - ./asterisk-docker/asterisk/logs:/var/log/asterisk
@@ -61,15 +136,25 @@ services:
       - tfg_net
 
   # === FUTURO: WHISPER/VOSK SERVICE ===
-  # whisper:
-  #   build: ./whisper-service
-  #   container_name: whisper
+  # vosk-service:
+  #   build:
+  #     context: ./vosk-service
+  #     dockerfile: Dockerfile.vosk
+  #   container_name: vosk-service
   #   restart: unless-stopped
-  #   volumes:
-  #     - ./asterisk-docker/asterisk/whisper:/var/spool/asterisk/whisper
-  #     - ./whisper-service/command-map.json:/app/command-map.json
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     DB_HOST: mariadb-service
+  #     DB_USER: ${MYSQL_USER}
+  #     DB_PASS: ${MYSQL_PASSWORD}
+  #     DB_NAME: ${MYSQL_DATABASE}
+  #     MQTT_HOST: mosquitto
+  #     MQTT_PORT: ${MQTT_PORT}
+  #     MQTT_USER: ${MQTT_USER}
+  #     MQTT_PASS: ${MQTT_PASS}
   #   depends_on:
-  #     - asterisk
+  #     - mariadb-service
   #     - mosquitto
   #   networks:
   #     - tfg_net
