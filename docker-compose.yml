@@ -69,6 +69,7 @@ services:
   mqtt-listener:
     build:
       context: ./services/mqtt-listener
+      dockerfile: Dockerfile.listener
     container_name: mqtt-listener
     restart: unless-stopped
     env_file:
