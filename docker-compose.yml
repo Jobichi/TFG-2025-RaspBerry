@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # === MARIADB ===
   mariadb-service:
@@ -20,7 +18,7 @@ services:
     ports:
       - "3306:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u${MYSQL_USER:-root} -p${MYSQL_PASSWORD:-root} --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -60,11 +58,12 @@ services:
       - ./mqtt-docker/data:/mosquitto/data
       - ./mqtt-docker/log:/mosquitto/log
     healthcheck:
-      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-p", "${MQTT_PORT}", "-t", "health/check", "-m", "ok"]
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p ${MQTT_PORT:-1883} -t health/check -m ok || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+
     networks:
       - tfg_net
     logging:
