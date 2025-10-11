@@ -2,18 +2,26 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema mínimas
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
-    build-essential wget git ffmpeg \
+    build-essential wget git ffmpeg unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Descargar modelo si no existe
+RUN if [ ! -d "/model" ]; then \
+      echo "[INFO] Descargando modelo Vosk (español small)..." && \
+      wget -q https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip && \
+      unzip vosk-model-small-es-0.42.zip && \
+      mv vosk-model-small-es-0.42 /model && \
+      rm vosk-model-small-es-0.42.zip; \
+    fi
 
 # Instalar dependencias Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el servidor Flask y los modelos
+# Copiar el servidor Flask
 COPY server.py /app/server.py
-COPY model /model
 
 EXPOSE 2700
 
