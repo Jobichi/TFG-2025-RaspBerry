@@ -240,28 +240,28 @@ services:
           memory: 512M
 
   # === VOSK SERVICE ===
-vosk-service:
-    build:
-      context: ./services/vosk-service
-      dockerfile: Dockerfile.vosk
-    container_name: vosk-service
-    restart: unless-stopped
-    ports:
-      - "2700:2700"
-    networks:
-      - tfg_net
-    environment:
-      TZ: Europe/Madrid
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1.5G
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2700/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+  vosk-service:
+      build:
+        context: ./services/vosk-service
+        dockerfile: Dockerfile.vosk
+      container_name: vosk-service
+      restart: unless-stopped
+      ports:
+        - "2700:2700"
+      networks:
+        - tfg_net
+      environment:
+        TZ: Europe/Madrid
+      deploy:
+        resources:
+          limits:
+            cpus: "1.0"
+            memory: 1.5G
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:2700/health"]
+        interval: 15s
+        timeout: 5s
+        retries: 3
 
 # === RED Y VOLÚMENES ===
 networks:
