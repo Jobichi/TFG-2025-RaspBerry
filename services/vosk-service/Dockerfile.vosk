@@ -10,10 +10,10 @@ RUN apt-get update && apt-get install -y \
 # Descargar modelo si no existe
 RUN if [ ! -d "/model" ]; then \
       echo "[INFO] Descargando modelo Vosk (español small)..." && \
-      wget -q https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip && \
-      unzip vosk-model-small-es-0.42.zip && \
-      mv vosk-model-small-es-0.42 /model && \
-      rm vosk-model-small-es-0.42.zip; \
+      wget -q https://alphacephei.com/vosk/models/vosk-model-es-0.42.zip && \
+      unzip vosk-model-es-0.42.zip && \
+      mv vosk-model-es-0.42 /model && \
+      rm vosk-model-es-0.42.zip; \
     fi
 
 # Instalar dependencias Python
