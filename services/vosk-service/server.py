@@ -5,7 +5,9 @@ import wave, json, io
 app = Flask(__name__)
 model = Model("/model")
 
-@app.route('/transcribe', methods=['POST'])
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok", "model_loaded": True}), 200
 def transcribe():
     if 'audio' not in request.files:
         return jsonify({"error": "No se envió ningún archivo 'audio'"}), 400

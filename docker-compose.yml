@@ -239,37 +239,29 @@ services:
           cpus: "0.6"
           memory: 512M
 
-  # === FUTURO: WHISPER/VOSK SERVICE ===
-  # vosk-service:
-  #   build:
-  #     context: ./vosk-service
-  #     dockerfile: Dockerfile.vosk
-  #   container_name: vosk-service
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./.env
-  #   environment:
-  #     DB_HOST: mariadb-service
-  #     DB_USER: ${MYSQL_USER}
-  #     DB_PASS: ${MYSQL_PASSWORD}
-  #     DB_NAME: ${MYSQL_DATABASE}
-  #     MQTT_HOST: mosquitto
-  #     MQTT_PORT: ${MQTT_PORT}
-  #     MQTT_USER: ${MQTT_USER}
-  #     MQTT_PASS: ${MQTT_PASS}
-  #     TZ: Europe/Madrid
-  #   depends_on:
-  #     mariadb-service:
-  #       condition: service_healthy
-  #     mosquitto:
-  #       condition: service_healthy
-  #   networks:
-  #     - tfg_net
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: "1.0"
-  #         memory: 1.5G
+  # === VOSK SERVICE ===
+vosk-service:
+    build:
+      context: ./services/vosk-service
+      dockerfile: Dockerfile.vosk
+    container_name: vosk-service
+    restart: unless-stopped
+    ports:
+      - "2700:2700"
+    networks:
+      - tfg_net
+    environment:
+      TZ: Europe/Madrid
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1.5G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2700/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
 # === RED Y VOLÚMENES ===
 networks:
