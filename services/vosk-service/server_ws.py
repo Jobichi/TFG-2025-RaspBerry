@@ -81,10 +81,12 @@ async def recognize(websocket, path):
                 break
 
             # Datos de audio
-            if rec.AcceptWaveform(message):
-                pass
+            if isinstance(message, (bytes, bytearray)):
+                if rec.AcceptWaveform(message):
+                    pass
             else:
-                pass
+                # Mensaje de control (eof o texto)
+                logging.debug(f"[WS] Mensaje de texto: {message}")
 
     except Exception as e:
         logging.error(f"[WS] Error en sesión: {e}", exc_info=True)

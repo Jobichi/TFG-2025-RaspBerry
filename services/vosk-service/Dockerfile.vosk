@@ -16,10 +16,10 @@ RUN mkdir -p /opt/vosk-model-es \
 WORKDIR /app
 COPY server_ws.py .
 
-# Instalar aiohttp para el endpoint /health
+# === Instalar dependencias Python necesarias ===
 RUN (python3 -m pip --version || (apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*)) \
     && python3 -m pip install --no-cache-dir --upgrade pip \
-    && python3 -m pip install --no-cache-dir aiohttp
+    && python3 -m pip install --no-cache-dir aiohttp paho-mqtt
 
 # === Configuración de entorno ===
 EXPOSE 2700 8080
