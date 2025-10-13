@@ -3,14 +3,14 @@ import json
 import time
 import traceback
 
-SERVER_URL = "ws://127.0.0.1:2700"
+SERVER_URL = "ws://192.168.1.100:2700"
 
 def main():
     try:
         print(f"🎙️ Conectando a {SERVER_URL} ...")
         ws = websocket.create_connection(SERVER_URL, timeout=10)
         ws.send(json.dumps({"config": {"sample_rate": 16000}}))
-        print("✅ Conexión establecida. Enviando audio...")
+        print("Conexión establecida. Enviando audio...")
 
         # Enviar un ping inicial para mantener viva la sesión (importante en Windows)
         try:
