@@ -1,30 +1,38 @@
-FROM python:3.11-slim
+FROM alphacep/kaldi-vosk-server:latest
 
+# Permite cambiar entre modelo "full" o "small"
+ARG VOSK_MODEL_FLAVOR=vosk-model-es
+ARG MODEL_VERSION=0.42
+
+# === Descargar modelo Vosk español ===
+RUN mkdir -p /opt/vosk-model-es \
+    && cd /opt/vosk-model-es \
+    && wget -q https://alphacephei.com/vosk/models/${VOSK_MODEL_FLAVOR}-${MODEL_VERSION}.zip \
+    && unzip ${VOSK_MODEL_FLAVOR}-${MODEL_VERSION}.zip \
+    && mv ${VOSK_MODEL_FLAVOR}-${MODEL_VERSION} model \
+    && rm -f ${VOSK_MODEL_FLAVOR}-${MODEL_VERSION}.zip
+
+# === Copiar servidor WebSocket y preparar entorno ===
 WORKDIR /app
+COPY server_ws.py .
 
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y \
-    build-essential wget git ffmpeg unzip \
-    && rm -rf /var/lib/apt/lists/*
+# Instalar aiohttp para el endpoint /health
+RUN (python3 -m pip --version || (apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*)) \
+    && python3 -m pip install --no-cache-dir --upgrade pip \
+    && python3 -m pip install --no-cache-dir aiohttp
 
-# Descargar modelo si no existe
-RUN if [ ! -d "/model" ]; then \
-      echo "[INFO] Descargando modelo Vosk (español small)..." && \
-      wget -q https://alphacephei.com/vosk/models/vosk-model-es-0.42.zip && \
-      unzip vosk-model-es-0.42.zip && \
-      mv vosk-model-es-0.42 /model && \
-      rm vosk-model-es-0.42.zip; \
-    fi
+# === Configuración de entorno ===
+EXPOSE 2700 8080
 
-# Instalar dependencias Python
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV VOSK_SERVER_INTERFACE=0.0.0.0 \
+    VOSK_SERVER_PORT=2700 \
+    VOSK_MODEL_PATH=/opt/vosk-model-es/model \
+    VOSK_SAMPLE_RATE=16000 \
+    VOSK_ALTERNATIVES=0 \
+    VOSK_SHOW_WORDS=true \
+    HEALTH_HTTP_PORT=8080
 
-# Copiar el servidor Flask
-COPY server.py /app/server.py
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+  CMD wget -qO- http://127.0.0.1:${HEALTH_HTTP_PORT}/health || exit 1
 
-EXPOSE 2700
-
-ENV TZ=Europe/Madrid
-
-CMD ["python", "server.py"]
+CMD ["python3", "server_ws.py"]
