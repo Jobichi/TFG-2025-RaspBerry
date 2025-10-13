@@ -245,8 +245,8 @@ services:
       context: ./services/vosk-service
       dockerfile: Dockerfile.vosk
       # Para usar el modelo pequeño en builds:
-      # args:
-      #   VOSK_MODEL_FLAVOR: vosk-model-small-es
+      args:
+        VOSK_MODEL_FLAVOR: vosk-model-small-es
     container_name: vosk-service
     restart: unless-stopped
     ports:
@@ -261,6 +261,11 @@ services:
       VOSK_ALTERNATIVES: "0"
       VOSK_SHOW_WORDS: "true"
       HEALTH_HTTP_PORT: "8080"
+      MQTT_HOST: mosquitto
+      MQTT_PORT: ${MQTT_PORT}
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
+      VOSK_MQTT_TOPIC: vosk/text
     networks:
       - tfg_net
     # IMPORTANTE: evita limitar memoria si usas el modelo full
