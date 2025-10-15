@@ -1,207 +1,135 @@
 #!/bin/bash
 set -e
 
-# --- Variables ---
-ENV_FILE=".env"
-ENV_GPG_FILE=".env.gpg"
+# === VARIABLES GLOBALES ===
+ENV_FILE="./.env"
+ENV_ENCRYPTED="./.env.gpg"
+DOCKER_COMPOSE="docker compose"
+
+# === COLORES ===
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[1;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}=== Verificando e instalando dependencias ===${NC}"
+
+# --- Verificar Docker ---
+if ! command -v docker &> /dev/null; then
+  echo "[INFO] Docker no encontrado. Instalando..."
+  curl -fsSL https://get.docker.com | sh
+else
+  echo "[INFO] Docker ya está instalado."
+fi
+
+# --- Verificar Docker Compose plugin ---
+if ! docker compose version &> /dev/null; then
+  echo "[INFO] Plugin de Docker Compose no encontrado. Instalando..."
+  sudo apt-get install -y docker-compose-plugin
+else
+  echo "[INFO] Docker Compose plugin ya está instalado."
+fi
+
+# --- Verificar GPG ---
+if ! command -v gpg &> /dev/null; then
+  echo "[INFO] GPG no encontrado. Instalando..."
+  sudo apt-get install -y gnupg
+else
+  echo "[INFO] GPG ya está instalado."
+fi
+
+# === CONFIGURAR VARIABLES DE ENTORNO ===
+echo -e "\n${BLUE}=== Configurando variables de entorno ===${NC}"
+
+# --- Desencriptar .env si existe versión cifrada ---
+if [ -f "$ENV_ENCRYPTED" ]; then
+  echo "[INFO] Se detectó .env.gpg — desencriptando..."
+  gpg --quiet --batch --yes -o "$ENV_FILE" -d "$ENV_ENCRYPTED" || {
+    echo "[ERROR] No se pudo desencriptar .env.gpg"
+    exit 1
+  }
+  echo "[INFO] .env desencriptado correctamente."
+else
+  echo "[INFO] .env.gpg no encontrado. Se usará o generará .env local."
+  touch "$ENV_FILE"
+fi
+
+# --- Función para generar variables faltantes ---
+ensure_env_var() {
+  local key="$1"
+  local gen_cmd="$2"
+  local current
+  current=$(grep -E "^${key}=" "$ENV_FILE" | cut -d'=' -f2- || true)
+  if [ -z "$current" ]; then
+    local value
+    value=$(eval "$gen_cmd")
+    sed -i "/^${key}=.*/d" "$ENV_FILE" 2>/dev/null || true
+    echo "${key}=${value}" >> "$ENV_FILE"
+    echo "[ENV] ${key} generado."
+  fi
+}
+
+# --- Generar valores si faltan ---
+ensure_env_var "MYSQL_ROOT_PASSWORD" "openssl rand -hex 16"
+ensure_env_var "MYSQL_DATABASE" "echo tfgdb"
+ensure_env_var "MYSQL_USER" "echo tfguser"
+ensure_env_var "MYSQL_PASSWORD" "openssl rand -hex 16"
+ensure_env_var "MQTT_USER" "echo admin"
+ensure_env_var "MQTT_PASS" "openssl rand -hex 12"
+ensure_env_var "MQTT_PORT" "echo 1883"
+ensure_env_var "TELEGRAM_BOT_TOKEN" "echo REEMPLAZAR_CON_TU_TOKEN"
+echo "[INFO] .env verificado y actualizado."
+
+# --- Volver a cifrar (si quieres mantenerlo seguro) ---
+if [ -f "$ENV_ENCRYPTED" ]; then
+  echo "[INFO] Actualizando versión cifrada de .env..."
+  gpg --yes -o "$ENV_ENCRYPTED" -c "$ENV_FILE"
+fi
+
+# === CONFIGURAR MOSQUITTO MQTT ===
+echo -e "\n${BLUE}=== Configurando Mosquitto MQTT ===${NC}"
 
 MQTT_PATH="./mqtt-docker"
-MQTT_UID=1883
-MQTT_GID=1883
+if [ -d "$MQTT_PATH" ]; then
+  echo "[INFO] Ajustando permisos para Mosquitto..."
+  sudo chown -R 1883:1883 "$MQTT_PATH/config" "$MQTT_PATH/data" "$MQTT_PATH/log" 2>/dev/null || true
+  sudo chmod -R 755 "$MQTT_PATH/config" "$MQTT_PATH/data" "$MQTT_PATH/log" 2>/dev/null || true
+  echo "[INFO] Permisos de Mosquitto corregidos correctamente."
+else
+  echo "[WARN] No se encontró el directorio mqtt-docker. Saltando..."
+fi
 
-# --- Funciones auxiliares ---
-check_and_install_docker() {
-    if ! command -v docker &> /dev/null; then
-        echo "[INFO] Docker no encontrado. Instalando..."
-        curl -fsSL https://get.docker.com -o get-docker.sh
-        sh get-docker.sh
-        rm get-docker.sh
-        echo "[INFO] Docker instalado correctamente."
+# === VERIFICAR MODELOS DE IA ===
+echo -e "\n${BLUE}=== Verificando modelos de IA ===${NC}"
 
-        # Agregar usuario actual al grupo docker
-        sudo usermod -aG docker $USER
-        echo "[INFO] Usuario $USER agregado al grupo docker. Puede necesitar re-login."
-    else
-        echo "[INFO] Docker ya está instalado."
-    fi
-}
+# --- Tiny-LLaMA ---
+if [ -d "./models/tiny-llama" ]; then
+  echo "[INFO] Modelo Tiny-LLaMA ya presente."
+else
+  echo "[INFO] Descargando modelo Tiny-LLaMA..."
+  mkdir -p ./models/tiny-llama
+  wget -q https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0/resolve/main/model.safetensors -O ./models/tiny-llama/model.safetensors
+  echo "[INFO] Modelo Tiny-LLaMA descargado correctamente."
+fi
 
-check_and_install_docker_compose_plugin() {
-    if ! docker compose version &> /dev/null; then
-        echo "[INFO] Docker Compose plugin no encontrado. Instalando..."
-        sudo apt-get update
-        sudo apt-get install -y docker-compose-plugin
-        echo "[INFO] Docker Compose plugin instalado correctamente."
-    else
-        echo "[INFO] Docker Compose plugin ya está instalado."
-    fi
-}
+# --- Vosk ---
+if [ -d "./services/vosk-service/model" ]; then
+  echo "[INFO] Modelo Vosk ya presente."
+else
+  echo "[INFO] Descargando modelo pequeño de Vosk (español)..."
+  mkdir -p ./services/vosk-service
+  wget -q https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip -O ./services/vosk-service/vosk-model-small-es-0.42.zip
+  unzip -qq ./services/vosk-service/vosk-model-small-es-0.42.zip -d ./services/vosk-service/
+  mv ./services/vosk-service/vosk-model-small-es-0.42 ./services/vosk-service/model
+  rm ./services/vosk-service/vosk-model-small-es-0.42.zip
+  echo "[INFO] Modelo Vosk instalado correctamente."
+fi
 
-fix_mosquitto_permissions() {
-    echo "[INFO] Ajustando permisos para Mosquitto..."
-    for dir in config data log; do
-        local target="${MQTT_PATH}/${dir}"
-        if [ -d "$target" ]; then
-            sudo chown -R ${MQTT_UID}:${MQTT_GID} "$target"
-            sudo chmod -R 755 "$target"
-            echo "   → Permisos corregidos en $target"
-        else
-            echo "   → Creando directorio $target"
-            sudo mkdir -p "$target"
-            sudo chown -R ${MQTT_UID}:${MQTT_GID} "$target"
-            sudo chmod -R 755 "$target"
-        fi
-    done
-    echo "[INFO] Permisos de Mosquitto corregidos correctamente."
-}
+# === DESPLEGAR CONTENEDORES ===
+echo -e "\n${BLUE}=== Desplegando contenedores Docker ===${NC}"
+$DOCKER_COMPOSE build
+$DOCKER_COMPOSE up -d
 
-check_gpg_installation() {
-    if ! command -v gpg &> /dev/null; then
-        echo "[ERROR] GPG no instalado. Instala con: sudo apt-get install gnupg"
-        exit 1
-    fi
-}
-
-decrypt_env_file() {
-    echo "[INFO] Verificando archivo encriptado $ENV_GPG_FILE..."
-
-    if [ ! -f "$ENV_GPG_FILE" ]; then
-        echo "[ERROR] No se encontró $ENV_GPG_FILE. Aborta."
-        exit 1
-    fi
-
-    # Siempre desencriptar (forzar la entrada de contraseña)
-    echo "[INFO] Desencriptando $ENV_GPG_FILE a $ENV_FILE ..."
-    echo "[IMPORTANTE] Se te pedirá la contraseña GPG ahora..."
-
-    # Desencriptar mostrando progreso
-    if gpg --decrypt --output "$ENV_FILE" "$ENV_GPG_FILE"; then
-        echo "[INFO] Archivo desencriptado correctamente."
-
-        # Verificar que el archivo no esté vacío y tenga contenido válido
-        if [ ! -s "$ENV_FILE" ]; then
-            echo "[ERROR] Archivo .env está vacío después de desencriptar"
-            exit 1
-        fi
-
-        # Verificar que contiene variables de entorno
-        if grep -q "=" "$ENV_FILE"; then
-            echo "[INFO] Archivo .env contiene variables de entorno válidas."
-        else
-            echo "[WARNING] Archivo .env no parece contener variables de entorno válidas."
-        fi
-
-        # Mostrar primeras líneas (sin valores sensibles)
-        echo "[INFO] Primeras variables encontradas:"
-        head -n 5 "$ENV_FILE" | sed 's/=.*/=***/g'
-
-    else
-        echo "[ERROR] Falló la desencriptación. Verifica la contraseña."
-        exit 1
-    fi
-}
-
-download_model() {
-    local MODEL_DIR="./models/tiny-llama"
-    local MODEL_REPO="https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-
-    if [ ! -d "$MODEL_DIR" ] || [ -z "$(ls -A $MODEL_DIR)" ]; then
-        echo "[INFO] Descargando modelo Tiny-LLaMA (puede tardar varios minutos)..."
-        mkdir -p "$MODEL_DIR"
-
-        # Instalar git-lfs si no está
-        if ! command -v git-lfs &> /dev/null; then
-            echo "[INFO] Instalando git-lfs..."
-            sudo apt-get update
-            sudo apt-get install -y git-lfs
-            git lfs install
-        fi
-
-        # Guardar directorio actual
-        local current_dir=$(pwd)
-        cd "$MODEL_DIR"
-
-        # Intentar descarga con timeout
-        if timeout 1200 git clone "$MODEL_REPO" . ; then
-            echo "[INFO] Modelo descargado correctamente en $MODEL_DIR"
-        else
-            echo "[WARNING] Descarga falló o timeout. Continuando sin modelo completo."
-            echo "[INFO] Puedes descargarlo manualmente después con:"
-            echo "  cd $MODEL_DIR && git clone $MODEL_REPO ."
-        fi
-
-        # Volver al directorio original
-        cd "$current_dir"
-    else
-        echo "[INFO] Modelo Tiny-LLaMA ya presente en $MODEL_DIR"
-    fi
-}
-
-# --- 1. Comprobar dependencias ---
-echo "=== Verificando e instalando dependencias ==="
-check_and_install_docker
-check_and_install_docker_compose_plugin
-check_gpg_installation
-
-# --- 2. Desencriptar .env.gpg ---
-echo ""
-echo "=== Configurando variables de entorno ==="
-decrypt_env_file
-
-# --- 3. Preparar entorno de Mosquitto ---
-echo ""
-echo "=== Configurando Mosquitto MQTT ==="
-fix_mosquitto_permissions
-
-# --- 4. Descargar modelo Tiny-LLaMA si no existe ---
-echo ""
-echo "=== Verificando modelo de IA ==="
-download_model
-
-# --- 5. Levantar contenedores ---
-echo ""
-echo "=== Desplegando contenedores ==="
-
-# Cargar variables de entorno para Docker Compose
-echo "[INFO] Cargando variables de entorno..."
-set -a
-source "$ENV_FILE"
-set +a
-
-echo "[INFO] Construyendo imágenes (puede tardar)..."
-sudo docker compose build --no-cache
-
-echo "[INFO] Iniciando contenedores..."
-sudo docker compose up -d
-
-# --- 6. Verificar que los contenedores estén corriendo ---
-echo ""
-echo "=== Verificando despliegue ==="
-echo "[INFO] Esperando 10 segundos para que los contenedores inicien..."
-sleep 10
-
-echo "[INFO] Contenedores en ejecución:"
-sudo docker ps
-
-# --- 7. Mostrar logs iniciales ---
-echo ""
-echo "[INFO] Últimas líneas de logs:"
-sudo docker compose logs --tail=20
-
-# --- 8. Mensaje final ---
-echo ""
-echo "=== DESPLIEGUE COMPLETADO ==="
-echo ""
-echo "✅ Todos los servicios están en ejecución"
-echo ""
-echo "📊 Para ver los logs en tiempo real:"
-echo "   sudo docker compose logs -f"
-echo ""
-echo "🔌 Para probar MQTT:"
-echo "   mosquitto_sub -h 127.0.0.1 -p 1883 -t 'announce/#' -u \$MQTT_USER -P \$MQTT_PASS -v"
-echo ""
-echo "🐛 Para detener los contenedores:"
-echo "   sudo docker compose down"
-echo ""
-echo "🔄 Para reiniciar:"
-echo "   sudo docker compose restart"
+echo -e "\n${GREEN}✅ Todos los contenedores se han desplegado correctamente.${NC}"
+echo "Puedes verificar su estado con:"
+echo "   docker compose ps"

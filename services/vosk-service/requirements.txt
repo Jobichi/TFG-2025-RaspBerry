@@ -1,3 +1,12 @@
-flask
-vosk
+# ASR
+vosk==0.3.45
+
+# WebSocket + HTTP de salud
+websockets>=12
+aiohttp>=3.9
+
+# MQTT para publicar resultados
+paho-mqtt>=1.6
+
+# Opcional para test/local (leer wav)
 soundfile
