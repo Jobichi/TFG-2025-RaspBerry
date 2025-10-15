@@ -69,6 +69,31 @@ fi
 # --- 3. Preparar entorno de Mosquitto ---
 fix_mosquitto_permissions
 
+# --- 3.5. Descargar modelo Tiny-LLaMA si no existe ---
+MODEL_DIR="./models/tiny-llama"
+MODEL_REPO="https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+
+if [ ! -d "$MODEL_DIR" ] || [ -z "$(ls -A $MODEL_DIR)" ]; then
+    echo "[INFO] Descargando modelo Tiny-LLaMA..."
+    mkdir -p "$MODEL_DIR"
+    cd "$MODEL_DIR"
+
+    # Instalar git-lfs si no está
+    if ! command -v git-lfs &> /dev/null; then
+        echo "[INFO] Instalando git-lfs..."
+        sudo apt-get update
+        sudo apt-get install -y git-lfs
+        git lfs install
+    fi
+
+    git clone "$MODEL_REPO" .
+    echo "[INFO] Modelo descargado en $MODEL_DIR"
+    cd - > /dev/null
+else
+    echo "[INFO] Modelo Tiny-LLaMA ya presente en $MODEL_DIR"
+fi
+
+
 # --- 4. Levantar contenedores ---
 echo "[INFO] Levantando contenedores con build..."
 docker compose build --no-cache
