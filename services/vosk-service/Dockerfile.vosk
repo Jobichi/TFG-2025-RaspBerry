@@ -1,27 +1,26 @@
-FROM alphacep/kaldi-vosk-server:latest
+FROM python:3.9-slim-bullseye
 
-# Permite cambiar entre modelo "full" o "small"
-ARG VOSK_MODEL_FLAVOR=vosk-model-es
-ARG MODEL_VERSION=0.42
+# Instalar dependencias mínimas
+RUN apt-get update && apt-get install -y \
+    wget \
+    unzip \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
-# === Descargar modelo Vosk español ===
+# Instalar Vosk y dependencias
+RUN pip install vosk aiohttp websockets paho-mqtt
+
+# Descargar modelo pequeño español (más rápido en ARM)
 RUN mkdir -p /opt/vosk-model-es \
     && cd /opt/vosk-model-es \
-    && wget -q https://alphacephei.com/vosk/models/${VOSK_MODEL_FLAVOR}-${MODEL_VERSION}.zip \
-    && unzip ${VOSK_MODEL_FLAVOR}-${MODEL_VERSION}.zip \
-    && mv ${VOSK_MODEL_FLAVOR}-${MODEL_VERSION} model \
-    && rm -f ${VOSK_MODEL_FLAVOR}-${MODEL_VERSION}.zip
+    && wget -q https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip \
+    && unzip vosk-model-small-es-0.42.zip \
+    && mv vosk-model-small-es-0.42 model \
+    && rm -f vosk-model-small-es-0.42.zip
 
-# === Copiar servidor WebSocket y preparar entorno ===
 WORKDIR /app
 COPY server_ws.py .
 
-# === Instalar dependencias Python necesarias ===
-RUN (python3 -m pip --version || (apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*)) \
-    && python3 -m pip install --no-cache-dir --upgrade pip \
-    && python3 -m pip install --no-cache-dir aiohttp paho-mqtt
-
-# === Configuración de entorno ===
 EXPOSE 2700 8080
 
 ENV VOSK_SERVER_INTERFACE=0.0.0.0 \
