@@ -242,7 +242,7 @@ services:
   # === VOSK SERVICE ===
   vosk-service:
     build:
-      context: .
+      context: ./services/vosk-service
       dockerfile: Dockerfile.vosk
     ports:
       - "2700:2700"
