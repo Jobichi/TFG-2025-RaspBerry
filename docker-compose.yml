@@ -240,6 +240,7 @@ services:
           memory: 512M
 
   # === VOSK SERVICE ===
+  # === VOSK SERVICE ===
   vosk-service:
     build:
       context: ./services/vosk-service
@@ -248,9 +249,14 @@ services:
     ports:
       - "2700:2700"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:2700')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - tfg_net
-
 
   # === TINY-LLAMA SERVICE ===
   tiny-llama-service:
