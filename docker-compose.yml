@@ -241,13 +241,15 @@ services:
 
   # === VOSK SERVICE ===
   vosk-service:
-      build:
-        context: ./services/vosk-service
-        dockerfile: Dockerfile.vosk
-      container_name: vosk-service
-      ports:
-        - "2700:2700"
-      restart: unless-stopped
+    build:
+      context: ./services/vosk-service
+      dockerfile: Dockerfile.vosk
+    container_name: vosk-service
+    ports:
+      - "2700:2700"
+    restart: unless-stopped
+    networks:
+      - tfg_net
 
 
   # === TINY-LLAMA SERVICE ===
