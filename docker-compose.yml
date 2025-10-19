@@ -255,6 +255,7 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
+      MQTT_TOPIC: vosk/transcription
       VOSK_MODEL_PATH: model
       VOSK_SAMPLE_RATE: 16000
       TZ: Europe/Madrid

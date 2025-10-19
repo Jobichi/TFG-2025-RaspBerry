@@ -14,9 +14,9 @@ SAMPLE_RATE = float(os.getenv("VOSK_SAMPLE_RATE", "16000"))
 # Configuración MQTT
 MQTT_HOST = os.getenv("MQTT_HOST", "mosquitto")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
-MQTT_USER = os.getenv("MQTT_USER", "admin")
-MQTT_PASS = os.getenv("MQTT_PASS", "admin1234")
-MQTT_TOPIC = os.getenv("MQTT_TOPIC", "vosk/text")
+MQTT_USER = os.getenv("MQTT_USER", "user")
+MQTT_PASS = os.getenv("MQTT_PASS", "pass")
+MQTT_TOPIC = os.getenv("MQTT_TOPIC", "vosk/test")
 # ================================
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
