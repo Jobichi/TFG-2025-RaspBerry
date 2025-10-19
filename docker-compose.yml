@@ -215,9 +215,10 @@ services:
     container_name: asterisk
     restart: unless-stopped
     ports:
-      - "5060:5060/udp"                # SIP
-      - "5061:5061/tcp"                # SIP-TLS
-      - "10000-10019:10000-10019/udp"  # RTP
+      - "5060:5060/udp"
+      - "5061:5061/tcp"
+      - "8088:8088/tcp"
+      - "10000-10019:10000-10019/udp"
     volumes:
       - ./asterisk-docker/asterisk/config:/etc/asterisk
       - ./asterisk-docker/asterisk/logs:/var/log/asterisk
@@ -239,6 +240,36 @@ services:
           cpus: "0.6"
           memory: 512M
 
+  # === ARI SERVICE ===
+  ari-service:
+    build:
+      context: ./services/ari-service
+      dockerfile: Dockerfile.ari
+    container_name: ari-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      ASTERISK_ARI_URL: http://asterisk:8088/ari
+      ASTERISK_ARI_USER: user_ari
+      ASTERISK_ARI_PASS: ari123
+      ASTERISK_APP_NAME: stt_app
+      VOSK_WS_URL: ws://vosk-service:2700
+      MQTT_HOST: mosquitto
+      MQTT_PORT: ${MQTT_PORT}
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
+      MQTT_TOPIC_OUT: transcription/text
+    depends_on:
+      asterisk:
+        condition: service_healthy
+      vosk-service:
+        condition: service_started
+      mosquitto:
+        condition: service_started
+    networks:
+      - tfg_net
+
   # === VOSK SERVICE ===
   vosk-service:
     build:
@@ -255,7 +286,7 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: vosk/transcription
+      MQTT_TOPIC: transcription/text
       VOSK_MODEL_PATH: model
       VOSK_SAMPLE_RATE: 16000
       TZ: Europe/Madrid

@@ -1,0 +1,14 @@
+# Imagen base ligera con Python 3.11
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copiar archivos de requisitos e instalarlos
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código del servicio
+COPY . .
+
+# Puerto no necesario (solo conexiones salientes)
+CMD ["python", "main.py"]
