@@ -179,7 +179,7 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_API_KEY}
       TZ: Europe/Madrid
     depends_on:
       mariadb-service:

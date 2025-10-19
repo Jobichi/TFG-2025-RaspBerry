@@ -1,4 +1,2 @@
-cat > server/requirements.txt << 'EOF'
-vosk>=0.3.50
+vosk>=0.3.45
 websockets>=12.0
-EOF
