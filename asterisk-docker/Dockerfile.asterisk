@@ -1,51 +1,21 @@
-# Imagen base estable de Debian 12 con Asterisk 20
-FROM debian:bookworm-slim
+FROM debian:bullseye-slim
 
 LABEL maintainer="TFG Project"
-LABEL description="Asterisk 20 con soporte ARI, PJSIP y grabaciones"
+LABEL description="Asterisk 18 (Bullseye) con ARI y PJSIP para integración IoT"
 
-# ===============================
-# 1. Dependencias del sistema
-# ===============================
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    asterisk asterisk-dev asterisk-config \
-    curl wget ca-certificates net-tools iproute2 iputils-ping \
-    vim tcpdump \
-    && rm -rf /var/lib/apt/lists/*
+      asterisk asterisk-dev asterisk-config \
+      ca-certificates curl net-tools iputils-ping \
+      && apt-get clean \
+      && rm -rf /var/lib/apt/lists/*
 
-# ===============================
-# 2. Configuración de Asterisk
-# ===============================
-
-# Copiar configuración personalizada
+# Copiar configuración personalizada (ajusta ruta si cambia)
 COPY ./asterisk/config/ /etc/asterisk/
 
-# Directorios de logs y runtime
-RUN mkdir -p /var/log/asterisk /var/run/asterisk /var/spool/asterisk /var/lib/asterisk/sounds \
+# Crear directorios necesarios
+RUN mkdir -p /var/log/asterisk /var/spool/asterisk /var/lib/asterisk/sounds \
     && chown -R asterisk:asterisk /var/*/asterisk
 
-# ===============================
-# 3. Ajustes de entorno
-# ===============================
-ENV ASTERISK_USER=asterisk
-ENV ASTERISK_GROUP=asterisk
-ENV TZ=Europe/Madrid
-
-USER root
-
-# ===============================
-# 4. Puertos expuestos
-# ===============================
 EXPOSE 5060/udp 5061/tcp 8088/tcp 10000-10019/udp
 
-# ===============================
-# 5. Comprobación ARI y arranque
-# ===============================
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD asterisk -rx "core show uptime" || exit 1
-
-# ===============================
-# 6. Iniciar Asterisk en modo no interactivo
-# ===============================
 CMD ["asterisk", "-f", "-U", "asterisk", "-G", "asterisk", "-vvv"]
