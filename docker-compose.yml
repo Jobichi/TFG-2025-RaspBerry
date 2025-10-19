@@ -240,7 +240,6 @@ services:
           memory: 512M
 
   # === VOSK SERVICE ===
-  # === VOSK SERVICE ===
   vosk-service:
     build:
       context: ./services/vosk-service
@@ -249,6 +248,19 @@ services:
     ports:
       - "2700:2700"
     restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: ${MQTT_PORT}
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
+      VOSK_MODEL_PATH: model
+      VOSK_SAMPLE_RATE: 16000
+      TZ: Europe/Madrid
+    depends_on:
+      mosquitto:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import websockets; import asyncio; async def test(): async with websockets.connect('ws://localhost:2700') as ws: pass; asyncio.run(test())"]
       interval: 30s
@@ -257,6 +269,11 @@ services:
       start_period: 40s
     networks:
       - tfg_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # === TINY-LLAMA SERVICE ===
   tiny-llama-service:
