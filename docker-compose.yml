@@ -244,31 +244,40 @@ services:
   ari-service:
     build:
       context: ./services/ari-service
-      dockerfile: Dockerfile.ari
+      dockerfile: Dockerfile
     container_name: ari-service
     restart: unless-stopped
     env_file:
       - ./.env
     environment:
-      ASTERISK_ARI_URL: http://asterisk:8088/ari
-      ASTERISK_ARI_USER: user_ari
-      ASTERISK_ARI_PASS: ari123
-      ASTERISK_APP_NAME: stt_app
-      VOSK_WS_URL: ws://vosk-service:2700
+      ASTERISK_URL: http://asterisk:8088
+      ASTERISK_USER: ${ASTERISK_USER}
+      ASTERISK_PASS: ${ASTERISK_PASS}
       MQTT_HOST: mosquitto
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC_OUT: transcription/text
+      TZ: Europe/Madrid
+    volumes:
+      - ./services/ari-service:/app
     depends_on:
       asterisk:
         condition: service_healthy
       vosk-service:
         condition: service_started
-      mosquitto:
-        condition: service_started
+    # Para simplificar el flujo RTP y ARI:
     networks:
       - tfg_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   # === VOSK SERVICE ===
   vosk-service:
