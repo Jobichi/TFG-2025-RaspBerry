@@ -210,25 +210,29 @@ services:
   # === ASTERISK ===
   asterisk:
     build:
-      context: ./asterisk-docker
+      context: ./asterisk
       dockerfile: Dockerfile.asterisk
     container_name: asterisk
     restart: unless-stopped
+    environment:
+      TZ: Europe/Madrid
     ports:
-      - "5060:5060/udp"
-      - "5061:5061/tcp"
-      - "8088:8088/tcp"
-      - "10000-10019:10000-10019/udp"
+      - "5060:5060/udp"       # SIP UDP
+      - "5061:5061/tcp"       # SIP TCP (opcional)
+      - "8088:8088/tcp"       # HTTP (ARI/REST)
+      - "10000-10100:10000-10100/udp"  # RTP
     volumes:
-      - ./asterisk-docker/asterisk/config:/etc/asterisk
-      - ./asterisk-docker/asterisk/logs:/var/log/asterisk
+      - ./asterisk/config:/etc/asterisk
+      - ./asterisk/recordings:/var/spool/asterisk/recordings
+      - ./asterisk/logs:/var/log/asterisk
     networks:
       - tfg_net
     healthcheck:
-      test: ["CMD", "asterisk", "-rx", "core show uptime"]
+      test: ["CMD-SHELL", "asterisk -rx 'core show uptime' || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 5
+      start_period: 30s
     logging:
       driver: json-file
       options:
