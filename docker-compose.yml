@@ -214,74 +214,16 @@ services:
       dockerfile: Dockerfile.asterisk
     container_name: asterisk
     restart: unless-stopped
-    environment:
-      TZ: Europe/Madrid
-    ports:
-      - "5060:5060/udp"       # SIP UDP
-      - "5061:5061/tcp"       # SIP TCP (opcional)
-      - "8088:8088/tcp"       # HTTP (ARI/REST)
-      - "10000-10100:10000-10100/udp"  # RTP
+    network_mode: "host"
     volumes:
       - ./asterisk/config:/etc/asterisk
-      - ./asterisk/recordings:/var/spool/asterisk/recordings
       - ./asterisk/logs:/var/log/asterisk
-    networks:
-      - tfg_net
+      - ./asterisk/recordings:/var/spool/asterisk/recordings
     healthcheck:
-      test: ["CMD-SHELL", "asterisk -rx 'core show uptime' || exit 1"]
+      test: ["CMD", "asterisk", "-rx", "core show uptime"]
       interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.6"
-          memory: 512M
-
-  # === ARI SERVICE ===
-  ari-service:
-    build:
-      context: ./services/ari-service
-      dockerfile: Dockerfile
-    container_name: ari-service
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      ASTERISK_URL: http://asterisk:8088
-      ASTERISK_USER: ${ASTERISK_USER}
-      ASTERISK_PASS: ${ASTERISK_PASS}
-      MQTT_HOST: mosquitto
-      MQTT_PORT: ${MQTT_PORT}
-      MQTT_USER: ${MQTT_USER}
-      MQTT_PASS: ${MQTT_PASS}
-      TZ: Europe/Madrid
-    volumes:
-      - ./services/ari-service:/app
-    depends_on:
-      asterisk:
-        condition: service_healthy
-      vosk-service:
-        condition: service_started
-    # Para simplificar el flujo RTP y ARI:
-    networks:
-      - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
 
   # === VOSK SERVICE ===
   vosk-service:
