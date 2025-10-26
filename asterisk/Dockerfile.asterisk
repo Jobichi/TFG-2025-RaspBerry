@@ -1,9 +1,13 @@
-# Dockerfile para compilar Asterisk 22.6.0 con soporte PJSIP en ARM64
+# Imagen base
 FROM debian:bookworm-slim
 
 ENV ASTERISK_VERSION=22.6.0
 ENV ASTERISK_USER=asterisk
 ENV ASTERISK_GROUP=asterisk
+
+# Crear usuario y grupo con UID/GID fijos (compatibles con el host)
+RUN groupadd -g 200 ${ASTERISK_GROUP} && \
+    useradd -r -u 200 -g 200 -d /var/lib/asterisk -s /sbin/nologin ${ASTERISK_USER}
 
 # Instalación de dependencias necesarias
 RUN apt-get update && apt-get install -y \
@@ -26,20 +30,8 @@ RUN apt-get update && apt-get install -y \
     libspeexdsp-dev \
     libsrtp2-dev \
     ca-certificates \
+    bash \
     && rm -rf /var/lib/apt/lists/*
-
-# Crear usuario asterisk antes de usarlo
-RUN adduser --quiet --system --group --home /var/lib/asterisk ${ASTERISK_USER}
-
-# Crear carpetas necesarias y dar permisos
-RUN mkdir -p \
-        /var/log/asterisk \
-        /etc/asterisk \
-        /var/spool/asterisk/voicemail \
-        /var/spool/asterisk/recordings \
-        /var/run/asterisk && \
-    chown -R ${ASTERISK_USER}:${ASTERISK_GROUP} /var/*/asterisk && \
-    chmod -R 775 /var/*/asterisk
 
 WORKDIR /usr/src
 
@@ -49,18 +41,42 @@ RUN wget https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-${ASTERI
     cd asterisk-${ASTERISK_VERSION} && \
     ./configure --with-pjproject-bundled --with-crypto --with-ssl --with-srtp && \
     make menuselect.makeopts && \
-    menuselect/menuselect --enable CORE-SOUNDS-EN-WAV --enable MOH-OPSOUND-WAV menuselect.makeopts && \
+    menuselect/menuselect --enable app_mixmonitor menuselect.makeopts && \
+    menuselect/menuselect --enable format_wav menuselect.makeopts && \
+    menuselect/menuselect --enable CORE-SOUNDS-EN-WAV menuselect.makeopts && \
+    menuselect/menuselect --enable MOH-OPSOUND-WAV menuselect.makeopts && \
     make -j$(nproc) && \
     make install && \
     make samples && \
     make config && \
-    ldconfig && \
-    rm -rf /usr/src/asterisk-${ASTERISK_VERSION}*  # limpieza post build
+    ldconfig
 
+# Crear estructura necesaria y corregir permisos
+RUN mkdir -p \
+        /etc/asterisk \
+        /var/log/asterisk \
+        /var/spool/asterisk/voicemail \
+        /var/spool/asterisk/recordings \
+        /var/run/asterisk && \
+    chown -R ${ASTERISK_USER}:${ASTERISK_GROUP} /var/*/asterisk && \
+    chmod -R 775 /var/*/asterisk
+
+# Script de entrada para corregir permisos de volúmenes antes de ejecutar Asterisk
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "[Entrypoint] Corrigiendo permisos..."\n\
+chown -R ${ASTERISK_USER}:${ASTERISK_GROUP} /var/log/asterisk /var/spool/asterisk/recordings || true\n\
+chmod -R 775 /var/log/asterisk /var/spool/asterisk/recordings || true\n\
+echo "[Entrypoint] Iniciando Asterisk..."\n\
+exec /usr/sbin/asterisk -f -U ${ASTERISK_USER}\n' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+# Establecer usuario no root por defecto
 USER ${ASTERISK_USER}
 
 WORKDIR /etc/asterisk
 
+# Exponer puertos SIP y RTP
 EXPOSE 5060/udp 5060/tcp 10000-10100/udp
 
-ENTRYPOINT ["/usr/sbin/asterisk", "-f", "-U", "asterisk"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -39,7 +39,7 @@ services:
   # === BROKER MQTT (MOSQUITTO) ===
   mosquitto:
     build:
-      context: ./mqtt-docker
+      context: ./mosquitto
       dockerfile: Dockerfile.mosquitto
     container_name: mosquitto
     restart: unless-stopped
@@ -54,9 +54,9 @@ services:
       - "1883:1883"
       # - "9001:9001"
     volumes:
-      - ./mqtt-docker/config:/mosquitto/config
-      - ./mqtt-docker/data:/mosquitto/data
-      - ./mqtt-docker/log:/mosquitto/log
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h localhost -p ${MQTT_PORT:-1883} -u ${MQTT_USER:-user} -P ${MQTT_PASS:-pass} -t health/check -m ok || exit 1"]
       interval: 10s
@@ -162,11 +162,11 @@ services:
           memory: 256M
 
   # === TELEGRAM BOT ===
-  telegram-bot:
+  telegram:
     build:
-      context: ./telegram-docker
+      context: ./telegram
       dockerfile: Dockerfile.telegram
-    container_name: telegram-bot
+    container_name: telegram
     restart: unless-stopped
     env_file:
       - ./.env
