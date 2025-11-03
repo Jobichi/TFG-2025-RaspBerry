@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   # === MARIADB ===
   mariadb-service:
@@ -18,23 +20,13 @@ services:
     ports:
       - "3306:3306"
     healthcheck:
-      test: ["CMD-SHELL", "cat /proc/1/cmdline | grep -q mariadbd || exit 1"]
-      interval: 15s
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u${MYSQL_USER} -p${MYSQL_PASSWORD} --silent"]
+      interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 25s
     networks:
       - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.8"
-          memory: 512M
 
   # === BROKER MQTT (MOSQUITTO) ===
   mosquitto:
@@ -49,32 +41,20 @@ services:
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
       TZ: Europe/Madrid
-      # MQTT_FORCE_REGEN: "1"
     ports:
       - "1883:1883"
-      # - "9001:9001"
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h localhost -p ${MQTT_PORT:-1883} -u ${MQTT_USER:-user} -P ${MQTT_PASS:-pass} -t health/check -m ok || exit 1"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
       start_period: 15s
     networks:
       - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
 
   # === SERVICIO PONG (TEST MQTT) ===
   pong-service:
@@ -94,26 +74,14 @@ services:
     depends_on:
       mosquitto:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f pong-service || exit 1"]
+      interval: 25s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - tfg_net
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.2"
-          memory: 128M
 
   # === LISTENER (PERSISTE announce/# EN LA DB) ===
   mqtt-listener:
@@ -140,26 +108,14 @@ services:
         condition: service_healthy
       mosquitto:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f mqtt-listener || exit 1"]
+      interval: 25s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
       - tfg_net
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.4"
-          memory: 256M
 
   # === TELEGRAM BOT ===
   telegram:
@@ -172,9 +128,14 @@ services:
       - ./.env
     depends_on:
       - mosquitto
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f telegram || exit 1"]
+      interval: 25s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
       - tfg_net
-
 
   # === ASTERISK ===
   asterisk:
@@ -196,9 +157,10 @@ services:
       "
     healthcheck:
       test: ["CMD", "asterisk", "-rx", "core show uptime"]
-      interval: 20s
+      interval: 25s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 30s
 
   # === VOSK SERVICE ===
   vosk-service:
@@ -224,18 +186,13 @@ services:
       mosquitto:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import websockets; import asyncio; async def test(): async with websockets.connect('ws://localhost:2700') as ws: pass; asyncio.run(test())"]
+      test: ["CMD", "python3", "-c", "import asyncio, websockets; async def t(): async with websockets.connect('ws://localhost:2700'): pass; asyncio.run(t())"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     networks:
       - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   # === STT SERVICE ===
   stt-service:
@@ -252,72 +209,48 @@ services:
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
       MQTT_TOPIC: transcription/text
-    networks:
-      - tfg_net
     volumes:
       - ./asterisk/recordings:/asterisk/recordings
     depends_on:
-      - vosk-service
-      - mosquitto
+      vosk-service:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f stt-service || exit 1"]
+      interval: 25s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - tfg_net
 
-
-  # === TINY-LLAMA SERVICE ===
-  tiny-llama-service:
+  # === INTENT SERVICE ===
+  intent-service:
     build:
-      context: ./services/tiny-llama-service
-      dockerfile: Dockerfile.llama
-    container_name: tiny-llama-service
+      context: ./services/intent-service
+      dockerfile: Dockerfile.intent
+    container_name: intent-service
     restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
     env_file:
       - ./.env
     environment:
-      # --- MQTT ---
       MQTT_HOST: mosquitto
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-
-      # --- DB ---
-      DB_HOST: mariadb-service
-      DB_USER: ${MYSQL_USER}
-      DB_PASS: ${MYSQL_PASSWORD}
-      DB_NAME: ${MYSQL_DATABASE}
-
-      # --- GENERAL ---
-      TZ: Europe/Madrid
-
-      # Opcional: puedes controlar nivel de logs
-      PYTHONUNBUFFERED: "1"
-    volumes:
-      - ./models/tiny-llama:/models        # monta el modelo descargado
-    depends_on:
-      mariadb-service:
-        condition: service_healthy
-      mosquitto:
-        condition: service_healthy
-      vosk-service:
-        condition: service_started
-    networks:
-      - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 2G
-
-  # === ENTORNO PARA PRUEBAS ===
-  db-test:
-    build: ./services/llm-service
-    container_name: db-test
-    env_file:
-      - .env
-    depends_on:
-      - mariadb-service
+      MQTT_TRANS_TOPIC: transcription/text
+      MATT_BBDD_TOPIC: system/response/intent/actuators/#
+      MATT_OUT_TOPIC: set
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f intent-service || exit 1"]
+      interval: 25s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
       - tfg_net
 
