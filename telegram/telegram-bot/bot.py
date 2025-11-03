@@ -71,46 +71,46 @@ def build_main_keyboard():
 def build_device_menu(req_type, user_id=None):
     """Menú de dispositivos con estado visual"""
     devices = list(device_cache[req_type].keys())
-    
+
     if not devices:
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{EMOJIS['refresh']} Actualizar", callback_data=f"refresh|{req_type}")],
             [InlineKeyboardButton(f"{EMOJIS['back']} Volver", callback_data="main_menu")]
         ])
-    
+
     keyboard = []
     for dev in devices:
         components = device_cache[req_type].get(dev, [])
         status_emoji = "🟢" if components else "⚫"
         button_text = f"{status_emoji} {dev} ({len(components)})"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=f"device|{req_type}|{dev}")])
-    
+
     keyboard.append([InlineKeyboardButton(f"{EMOJIS['refresh']} Actualizar", callback_data=f"refresh|{req_type}")])
     keyboard.append([InlineKeyboardButton(f"{EMOJIS['back']} Volver", callback_data="main_menu")])
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 def build_component_menu(req_type, device, user_id=None):
     """Submenú de componentes con información de estado"""
     items = device_cache[req_type].get(device, [])
-    
+
     if not items:
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(f"{EMOJIS['refresh']} Actualizar", callback_data=f"refresh_component|{req_type}|{device}")],
             [InlineKeyboardButton(f"{EMOJIS['back']} Atrás", callback_data=f"back|{req_type}")]
         ])
-    
+
     keyboard = []
     for item in items:
         state_emoji = "📊" if req_type == "sensors" else "🔘"
         button_text = f"{state_emoji} {item['name']}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=f"component|{req_type}|{device}|{item['id']}")])
-    
+
     keyboard.append([
         InlineKeyboardButton(f"{EMOJIS['refresh']} Actualizar", callback_data=f"refresh_component|{req_type}|{device}"),
         InlineKeyboardButton(f"{EMOJIS['back']} Atrás", callback_data=f"back|{req_type}")
     ])
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 # === GESTIÓN DE SESIONES DE USUARIO ===
@@ -136,14 +136,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando de inicio mejorado con bienvenida personalizada"""
     user = update.effective_user
     chat_id = update.effective_chat.id
-    
+
     logger.info(f"[TELEGRAM] Usuario {user.first_name} ({user.id}) conectado")
 
     app = context.application
     if "active_chats" not in app.bot_data:
         app.bot_data["active_chats"] = set()
     app.bot_data["active_chats"].add(chat_id)
-    
+
     update_user_session(user.id, "start")
 
     welcome_text = f"""
@@ -159,19 +159,19 @@ Selecciona una opción del menú:
 """
 
     reply_markup = build_main_keyboard()
-    
+
     if context.user_data.get("welcome_message_id"):
         try:
             await context.bot.delete_message(chat_id, context.user_data["welcome_message_id"])
         except:
             pass
-    
+
     message = await update.message.reply_text(
         welcome_text,
         reply_markup=reply_markup,
         parse_mode="MarkdownV2"
     )
-    
+
     context.user_data["welcome_message_id"] = message.message_id
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -185,7 +185,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Selecciona el sensor específico
 
 *⚙️ Gestionar Actuadores:*
-• Selecciona "⚙️ Actuadores" 
+• Selecciona "⚙️ Actuadores"
 • Elige un dispositivo
 • Controla componentes individuales
 
@@ -210,7 +210,7 @@ async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Manejo mejorado de opciones del menú con feedback visual"""
     user = update.effective_user
     text = update.message.text.lower().strip()
-    
+
     logger.info(f"[TELEGRAM] Usuario {user.id} seleccionó: {text}")
     update_user_session(user.id, f"menu_{text}")
 
@@ -236,15 +236,15 @@ async def handle_sensors_request(update: Update, context: ContextTypes.DEFAULT_T
     """Manejo mejorado de petición de sensores"""
     user = update.effective_user
     user_session = get_user_session(user.id)
-    
+
     if not device_cache["sensors"]:
         loading_msg = await update.message.reply_text(
             f"{EMOJIS['loading']} Consultando sensores disponibles..."
         )
         user_session["pending_requests"].add("sensors")
-        
+
         mqtt_client.publish("system/get/telegram", json.dumps({"request": "sensors"}))
-        
+
         await asyncio.sleep(3)
         if device_cache["sensors"]:
             await loading_msg.delete()
@@ -270,15 +270,15 @@ async def handle_actuators_request(update: Update, context: ContextTypes.DEFAULT
     """Manejo mejorado de petición de actuadores"""
     user = update.effective_user
     user_session = get_user_session(user.id)
-    
+
     if not device_cache["actuators"]:
         loading_msg = await update.message.reply_text(
             f"{EMOJIS['loading']} Consultando actuadores disponibles..."
         )
         user_session["pending_requests"].add("actuators")
-        
+
         mqtt_client.publish("system/get/telegram", json.dumps({"request": "actuators"}))
-        
+
         await asyncio.sleep(3)
         if device_cache["actuators"]:
             await loading_msg.delete()
@@ -306,9 +306,9 @@ async def handle_alerts_request(update: Update, context: ContextTypes.DEFAULT_TY
     loading_msg = await update.message.reply_text(
         f"{EMOJIS['loading']} Consultando estado del sistema y alertas..."
     )
-    
+
     mqtt_client.publish("system/get/telegram", json.dumps({"request": "alerts"}))
-    
+
     await asyncio.sleep(2)
     await loading_msg.edit_text(
         f"{EMOJIS['alerts']} *Sistema de Alertas*\n\n"
@@ -322,13 +322,13 @@ async def handle_refresh_request(update: Update, context: ContextTypes.DEFAULT_T
     loading_msg = await update.message.reply_text(
         f"{EMOJIS['refresh']} Actualizando inventario del sistema..."
     )
-    
+
     device_cache["sensors"].clear()
     device_cache["actuators"].clear()
-    
+
     mqtt_client.publish("system/get/telegram", json.dumps({"request": "sensors"}))
     mqtt_client.publish("system/get/telegram", json.dumps({"request": "actuators"}))
-    
+
     await asyncio.sleep(3)
     await loading_msg.edit_text(
         f"{EMOJIS['success']} *Sistema Actualizado*\n\n"
@@ -428,7 +428,7 @@ def on_message(client, userdata, msg):
         logger.info(f"[MQTT] Mensaje recibido: {topic}")
 
         parts = topic.split("/")
-        
+
         if len(parts) < 4:
             return
 
@@ -445,7 +445,7 @@ def on_message(client, userdata, msg):
                 if not any(e["id"] == data["id"] for e in existing):
                     device_cache[req_type].setdefault(dev, []).append(data)
                     logger.info(f"[CACHE] {req_type}: añadido {data.get('name')} en {dev}")
-                
+
                 asyncio.run_coroutine_threadsafe(
                     notify_cache_update(app, req_type, dev),
                     loop,
@@ -498,7 +498,7 @@ async def show_data_in_chat(app, req_type, data):
     if req_type == "sensors":
         state = str(data.get('state', '')).lower()
         status_emoji = "🟢" if any(x in state for x in ['on', 'true', '1', 'activ']) else "🔴"
-        
+
         # MENSAJE CORREGIDO: Usar escape_markdown en todos los campos
         msg = (
             f"{EMOJIS['sensors']} *Información de Sensor*\n\n"
@@ -512,7 +512,7 @@ async def show_data_in_chat(app, req_type, data):
     elif req_type == "actuators":
         state = str(data.get('state', '')).lower()
         status_emoji = "🟢" if any(x in state for x in ['on', 'true', '1', 'activ']) else "🔴"
-        
+
         # MENSAJE CORREGIDO: Usar escape_markdown en todos los campos
         msg = (
             f"{EMOJIS['actuators']} *Información de Actuador*\n\n"
@@ -526,7 +526,7 @@ async def show_data_in_chat(app, req_type, data):
     elif req_type == "alerts":
         priority = data.get('priority', 'medium').lower()
         priority_emoji = "🔴" if priority == 'high' else "🟡" if priority == 'medium' else "🔵"
-        
+
         # MENSAJE CORREGIDO: Usar escape_markdown en todos los campos
         msg = (
             f"{priority_emoji} *ALERTA DEL SISTEMA*\n\n"
@@ -545,8 +545,8 @@ async def show_data_in_chat(app, req_type, data):
     for chat_id in list(app.bot_data["active_chats"]):
         try:
             await app.bot.send_message(
-                chat_id=chat_id, 
-                text=msg, 
+                chat_id=chat_id,
+                text=msg,
                 parse_mode="MarkdownV2",  # CAMBIADO a MarkdownV2
                 reply_markup=build_main_keyboard()
             )
@@ -560,12 +560,12 @@ def mqtt_loop(app, loop):
     global mqtt_client
     reconnect_attempts = 0
     max_reconnect_delay = 60
-    
+
     while True:
         try:
             mqtt_client = mqtt.Client(userdata={"app": app, "loop": loop})
             mqtt_client.username_pw_set(MQTT_USER, MQTT_PASS)
-            
+
             def on_connect(client, userdata, flags, rc):
                 nonlocal reconnect_attempts
                 if rc == 0:
@@ -576,25 +576,25 @@ def mqtt_loop(app, loop):
                     logger.info("[MQTT] ✅ Suscripciones activas: system/response/telegram/# y system/alert")
                 else:
                     logger.error(f"[MQTT] ❌ Error de conexión: código {rc}")
-            
+
             mqtt_client.on_connect = on_connect
             mqtt_client.on_message = on_message
 
             logger.info(f"[MQTT] Conectando a {MQTT_HOST}:{MQTT_PORT}...")
             mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
             mqtt_client.loop_forever()
-            
+
         except Exception as e:
             reconnect_attempts += 1
             delay = min(5 * reconnect_attempts, max_reconnect_delay)
-            
+
             logger.error(f"[MQTT] ❌ Error de conexión: {e}. Reintento {reconnect_attempts} en {delay}s...")
             time.sleep(delay)
 
 # === MAIN MEJORADO ===
 if __name__ == "__main__":
     logger.info("🚀 Iniciando bot Telegram mejorado...")
-    
+
     try:
         application = Application.builder().token(TOKEN).build()
 
@@ -610,6 +610,6 @@ if __name__ == "__main__":
 
         logger.info("✅ Bot iniciado correctamente. Esperando mensajes...")
         application.run_polling()
-        
+
     except Exception as e:
         logger.exception(f"❌ Error crítico al iniciar el bot: {e}")
