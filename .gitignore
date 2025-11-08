@@ -1,3 +1,99 @@
+# ==========================
+#   ARCHIVOS DE PYTHON
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos temporales de ejecución
 *.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de pruebas o cobertura
+.coverage
+.tox/
+.nox/
+.pytest_cache/
+htmlcov/
+*.cover
+*.coverage
+*.egg-info/
+.eggs/
+
+# ==========================
+#   ENTORNOS VIRTUALES
+# ==========================
+.venv/
+venv/
+env/
+ENV/
+
+# ==========================
+#   CONFIGURACIONES LOCALES
+# ==========================
+.env
 *.env
-*.db
+.env.*
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==========================
+#   ARCHIVOS DE DOCKER
+# ==========================
+# Imagenes, volúmenes, etc.
+*.pid
+*.seed
+*.pid.lock
+
+# Carpeta que puede generar docker-compose
+docker-compose.override.yml
+.docker/
+tmp/
+
+# ==========================
+#   ARCHIVOS DE SISTEMA
+# ==========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+desktop.ini
+
+# ==========================
+#   COMPILADOS / BINARIOS
+# ==========================
+*.so
+*.exe
+*.dll
+*.a
+*.out
+*.o
+
+# ==========================
+#   DISTRIBUCIÓN / BUILDS
+# ==========================
+build/
+dist/
+wheels/
+*.egg
+*.manifest
+*.spec
+
+# ==========================
+#   OTROS
+# ==========================
+# Archivos de logs o dumps de Raspberry
+*.dmp
+*.bak
+*.tmp
+
+# ==========================
+#   CONFIG PERSONAL OPCIONAL
+# ==========================
+# Puedes descomentar si trabajas con VS Code en remoto:
+# .devcontainer/
