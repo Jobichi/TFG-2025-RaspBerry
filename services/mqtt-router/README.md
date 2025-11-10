@@ -264,3 +264,223 @@ Comando de cambio de estado (router → ESP32).
 - Los ESP32:
     - Solo publican bajo `announce`, `update`, `alert` y `response`.
     - Solo se suscriben a `get/#`, `set/#` y `pong/#`.
+
+###
+
+# Flujo interno del `mqtt-router`
+
+El `mqtt-router` actúa como **punto central de enrutamiento y control** entre los microservicios internos y los dispositivos físicos (ESP32).
+Todos los mensajes MQTT pasan por él, garantizando coherencia entre la **base de datos**, el **hardware** y los **servicios lógicos** del sistema.
+
+---
+
+## 1. Flujo general de comunicaciones
+
+```text
+┌────────────────────────────┐
+│        Microservicios      │
+│  (Intent, Asterisk,        │
+│   Telegram, Dashboard...)  │
+└──────────────┬─────────────┘
+               │
+               │ Mensajes internos (dominio system/#)
+               │
+               ▼
+       ┌──────────────────────────┐
+       │        MQTT Router       │
+       │  (Handlers + DB Manager) │
+       │                          │
+       │  ┌────────────────────┐  │
+       │  │ system/select/#    │◄─┤─── Consultas persistentes (SELECT)
+       │  │ system/get/#       │◄─┤─── Peticiones en tiempo real
+       │  │ system/set/#       │◄─┤─── Comandos a dispositivos
+       │  │ response/#         │◄─┤─── Respuestas de lectura
+       │  │ announce/#         │◄─┤─── Registro inicial ESP32
+       │  │ update/#           │◄─┤─── Cambios de estado o valor
+       │  │ alert/#            │◄─┤─── Notificaciones de alerta
+       │  └────────────────────┘  │
+       │                          │
+       │  Base de datos MariaDB   │
+       │  ─────────────────────── │
+       │  devices / sensors /     │
+       │  actuators / alerts      │
+       └────────────┬─────────────┘
+                    │
+                    │ Mensajes físicos (dominio directo)
+                    │
+                    ▼
+         ┌────────────────────────────┐
+         │         ESP32 Nodes        │
+         │  (Sensores / Actuadores)   │
+         │                            │
+         │  Publican:                 │
+         │   - announce/<dev>/<t>/<id>│
+         │   - update/<dev>/<t>/<id>  │
+         │   - alert/<dev>/<t>/<id>   │
+         │   - response/<dev>/<t>/<id>│
+         │                            │
+         │  Reciben:                  │
+         │   - set/<dev>/<t>/<id>     │
+         │   - get/<dev>/<t>/<id>     │
+         └────────────────────────────┘
+```
+
+El router se comunica mediante los **topics `system/#`** con los microservicios,
+y mediante los **topics directos (`announce/#`, `update/#`, `set/#`, `get/#`, `response/#`, `alert/#`)** con los ESP32.
+
+---
+
+## 2. Flujo de mensajes **de entrada desde ESP32**
+
+| Topic recibido | Handler | Acción principal | Acceso DB | Publicaciones derivadas |
+|----------------|----------|------------------|------------|--------------------------|
+| `announce/<device>/<type>/<id>` | `announce_handler` | Registra o actualiza sensores y actuadores. | ✅ Inserta / actualiza | `system/notify/<device>/announce` |
+| `update/<device>/<type>/<id>` | `update_handler` | Actualiza valor/estado de componentes. | ✅ Actualiza | `system/notify/<device>/update` |
+| `alert/<device>/<type>/<id>` | `alert_handler` | Inserta alerta y notifica. | ✅ Inserta | `system/notify/alert` |
+| `response/<device>/<type>/<id>` | `response_handler` | Actualiza DB y reenvía lectura a requester. | ✅ Actualiza | `system/response/<servicio>/...` |
+
+---
+
+## 3. Flujo de mensajes **de entrada desde microservicios**
+
+| Topic recibido | Handler | Función | Acceso DB | Publicaciones derivadas |
+|----------------|----------|----------|------------|--------------------------|
+| `system/select/<servicio>` | `system_select_handler` | Consulta la BBDD (lectura persistente). | ✅ SELECT | `system/response/<servicio>/...` |
+| `system/get/<servicio>` | `system_get_handler` | Solicita datos en tiempo real. | ✅ Valida | `get/<device>/<type>/<id>` |
+| `system/set/<servicio>` | `system_set_handler` | Ordena cambio de estado físico. | ✅ Actualiza (actuadores) | `set/<device>/<type>/<id>` |
+
+---
+
+## 4. Flujo completo de lectura en tiempo real (`system/get`)
+
+```text
+┌────────────────────┐
+│ intent-service     │
+│ (u otro servicio)  │
+└────────┬───────────┘
+         │
+         │ system/get/<servicio>
+         ▼
+┌─────────────────────┐
+│ mqtt-router         │
+│ (system_get_handler)│
+│ - Valida en DB      │
+│ - Reenvía petición  │
+└────────┬────────────┘
+         │
+         │ get/<device>/<type>/<id>
+         ▼
+┌────────────────────┐
+│ ESP32              │
+│ - Lee sensor       │
+│ - Publica respuesta│
+└────────┬───────────┘
+         │
+         │ response/<device>/<type>/<id>
+         ▼
+┌────────────────────┐
+│ mqtt-router        │
+│ (response_handler) │
+│ - Actualiza DB     │
+│ - Reenvía lectura  │
+└────────┬───────────┘
+         │
+         │ system/response/<servicio>/sensor/<device>/<id>
+         ▼
+┌─────────────────────┐
+│ Servicio solicitante│
+│ recibe el valor     │
+└─────────────────────┘
+```
+
+---
+
+## 🔄 5. Flujo completo de cambio de estado (`system/set`)
+
+```text
+┌────────────────────┐
+│ asterisk-service   │
+│ o intent-service   │
+└────────┬───────────┘
+         │
+         │ system/set/<servicio>
+         ▼
+┌────────────────────┐
+│ mqtt-router        │
+│ (system_set_handler)│
+│ - Valida en DB     │
+│ - Reenvía orden    │
+└────────┬───────────┘
+         │
+         │ set/<device>/<type>/<id>
+         ▼
+┌────────────────────┐
+│ ESP32              │
+│ - Ejecuta acción   │
+│ - Publica confirm. │
+└────────┬───────────┘
+         │
+         │ update/<device>/<type>/<id>
+         ▼
+┌────────────────────┐
+│ mqtt-router        │
+│ (update_handler)   │
+│ - Actualiza DB     │
+│ - Notifica cambio  │
+└────────┬───────────┘
+         │
+         │ system/notify/<device>/update
+         ▼
+┌────────────────────┐
+│ Otros servicios    │
+│ (ej. Telegram)     │
+│ reciben evento     │
+└────────────────────┘
+```
+
+---
+
+## ⚙️ 6. Flujo de registro inicial (`announce`)
+
+```text
+ESP32 ──► announce/<device>/<type>/<id>
+│
+▼
+mqtt-router (announce_handler)
+```
+
+- Inserta/actualiza dispositivo en DB
+- Marca last_seen
+- Publica confirmación: system/notify/<device>/announce
+
+---
+
+## 7. Acceso a la base de datos
+
+| Operación | Handlers que la realizan | Tipo |
+|------------|--------------------------|-------|
+| `INSERT / UPDATE devices` | announce, update, alert | Escritura |
+| `INSERT / UPDATE sensors` | announce, update, response | Escritura |
+| `INSERT / UPDATE actuators` | announce, update, response, set | Escritura |
+| `INSERT alerts` | alert | Escritura |
+| `SELECT *` | system_select, system_get (validación) | Lectura |
+
+---
+
+## 8. Flujo de notificaciones internas
+
+El router emite notificaciones para que otros servicios puedan reaccionar:
+
+| Topic | Descripción | Generado por |
+|--------|--------------|--------------|
+| `system/notify/<device>/announce` | Confirmación de registro o reconexión. | announce_handler |
+| `system/notify/<device>/update` | Cambio o lectura de valor. | update_handler |
+| `system/notify/alert` | Nueva alerta registrada. | alert_handler |
+| `system/notify/set` | Acción ejecutada por un microservicio. | system_set_handler |
+
+---
+
+**Resumen:**
+- Todos los flujos físicos (`announce`, `update`, `alert`, `response`) parten de los ESP32.
+- Todos los flujos lógicos (`system/select`, `system/get`, `system/set`) parten de microservicios internos.
+- El `mqtt-router` centraliza y sincroniza ambos mundos mediante la base de datos y las notificaciones.
