@@ -57,26 +57,11 @@ services:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
-    healthcheck:
-      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p ${MQTT_PORT:-1883} -u ${MQTT_USER:-user} -P ${MQTT_PASS:-pass} -t health/check -m ok || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     networks:
       - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
 
-  # === SERVICIO PONG (TEST MQTT) ===
+
+  # === SERVICIO PONG (TEST MQTT) === (Posible integración en router futura)
   pong-service:
     build:
       context: ./services/pong-service
@@ -109,18 +94,13 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.2"
-          memory: 128M
 
-  # === LISTENER (PERSISTE announce/# EN LA DB) ===
-  mqtt-listener:
+  # === MQTT ROUTER ===
+  mqtt-router:
     build:
-      context: ./services/mqtt-listener
-      dockerfile: Dockerfile.listener
-    container_name: mqtt-listener
+      context: ./services/mqtt-router
+      dockerfile: Dockerfile.router
+    container_name : mqtt-router
     restart: unless-stopped
     env_file:
       - ./.env
@@ -130,36 +110,63 @@ services:
       DB_PASS: ${MYSQL_PASSWORD}
       DB_NAME: ${MYSQL_DATABASE}
       MQTT_HOST: mosquitto
-      MQTT_PORT: ${MQTT_PORT}
-      MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: announce/#
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PORT: ${MQTT_PORT}
       TZ: Europe/Madrid
     depends_on:
-      mariadb-service:
-        condition: service_healthy
-      mosquitto:
-        condition: service_healthy
+      - mosquitto
+      - mariadb-service
+    volumes:
+      - ./services/mqtt-router:/app
     networks:
       - tfg_net
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.4"
-          memory: 256M
+
+  # === LISTENER (PERSISTE announce/# EN LA DB) === (Deprecated)
+  # mqtt-listener:
+  #   build:
+  #     context: ./services/mqtt-listener
+  #     dockerfile: Dockerfile.listener
+  #   container_name: mqtt-listener
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     DB_HOST: mariadb-service
+  #     DB_USER: ${MYSQL_USER}
+  #     DB_PASS: ${MYSQL_PASSWORD}
+  #     DB_NAME: ${MYSQL_DATABASE}
+  #     MQTT_HOST: mosquitto
+  #     MQTT_PORT: ${MQTT_PORT}
+  #     MQTT_USER: ${MQTT_USER}
+  #     MQTT_PASS: ${MQTT_PASS}
+  #     MQTT_TOPIC: announce/#
+  #     TZ: Europe/Madrid
+  #   depends_on:
+  #     mariadb-service:
+  #       condition: service_healthy
+  #     mosquitto:
+  #       condition: service_healthy
+  #   networks:
+  #     - tfg_net
+  #   user: "1000:1000"
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   cap_drop:
+  #     - ALL
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #       cpus: "0.4"
+  #        memory: 256M
 
   # === TELEGRAM BOT ===
   telegram:
@@ -216,26 +223,14 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: transcription/text
+      MQTT_TOPIC: system/transcription/text
       VOSK_MODEL_PATH: model
       VOSK_SAMPLE_RATE: 16000
       TZ: Europe/Madrid
     depends_on:
-      mosquitto:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import websockets; import asyncio; async def test(): async with websockets.connect('ws://localhost:2700') as ws: pass; asyncio.run(test())"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - mosquitto
     networks:
       - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   # === STT SERVICE ===
   stt-service:
@@ -251,7 +246,7 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: transcription/text
+      MQTT_TOPIC: system/transcription/text
     networks:
       - tfg_net
     volumes:
@@ -260,23 +255,24 @@ services:
       - vosk-service
       - mosquitto
 
-  intent-service:
-    build:
-      context: ./services/mqtt-router
-      dockerfile: Dockerfile.router
-    container_name: intent-service
-    restart: unless-stopped
-    depends_on:
-      - mosquitto
-    env_file:
-      - ./.env
-    environment:
-      MQTT_HOST: mosquitto
-      MQTT_PORT: ${MQTT_PORT}
-      MQTT_USER: ${MQTT_USER}
-      MQTT_PASS: ${MQTT_PASS}
-    networks:
-      - tfg_net
+  # === INTENT SERVICE ===
+  # intent-service:
+  #   build:
+  #     context: ./services/mqtt-router
+  #     dockerfile: Dockerfile.router
+  #   container_name: intent-service
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - mosquitto
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     MQTT_HOST: mosquitto
+  #     MQTT_PORT: ${MQTT_PORT}
+  #     MQTT_USER: ${MQTT_USER}
+  #     MQTT_PASS: ${MQTT_PASS}
+  #   networks:
+  #     - tfg_net
 
 # === RED Y VOLÚMENES ===
 networks:

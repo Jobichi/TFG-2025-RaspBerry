@@ -27,7 +27,7 @@ class MQTTRouter:
             logger.warning(f"[MQTT] JSON inválido en {topic}")
             return
 
-        # Router de tópicos MQTT
+        # Router de tópicos MQTT -  Deriba a sus handlers:
         if topic.startswith("announce/"):
             announce_handler.handle(self.db, client, topic, payload)
         elif topic.startswith("update/"):
