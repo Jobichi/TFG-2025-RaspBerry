@@ -100,7 +100,7 @@ services:
     build:
       context: ./services/mqtt-router
       dockerfile: Dockerfile.router
-    container_name : mqtt-router
+    container_name: mqtt-router
     restart: unless-stopped
     env_file:
       - ./.env
@@ -115,12 +115,23 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       TZ: Europe/Madrid
     depends_on:
-      - mosquitto
-      - mariadb-service
-    volumes:
-      - ./services/mqtt-router:/app
+      mariadb-service:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
     networks:
       - tfg_net
+    healthcheck:
+      test: ["CMD", "python3", "listener.py", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 
   # === LISTENER (PERSISTE announce/# EN LA DB) === (Deprecated)
   # mqtt-listener:
@@ -195,12 +206,7 @@ services:
       - ./asterisk/config:/etc/asterisk
       - ./asterisk/logs:/var/log/asterisk
       - ./asterisk/recordings:/var/spool/asterisk/recordings
-    entrypoint: >
-      /bin/bash -c "
-        chown -R 200:200 /var/log/asterisk /var/spool/asterisk/recordings &&
-        chmod -R 775 /var/log/asterisk /var/spool/asterisk/recordings &&
-        exec /usr/sbin/asterisk -f -U asterisk
-      "
+    entrypoint: ["/entrypoint.sh"]
     healthcheck:
       test: ["CMD", "asterisk", "-rx", "core show uptime"]
       interval: 20s
