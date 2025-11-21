@@ -1,7 +1,7 @@
 # Imagen base
 FROM debian:bookworm-slim
 
-ENV ASTERISK_VERSION=22.6.0
+ENV ASTERISK_VERSION=20-current
 ENV ASTERISK_USER=asterisk
 ENV ASTERISK_GROUP=asterisk
 
@@ -38,7 +38,9 @@ WORKDIR /usr/src
 # Descarga y compilación de Asterisk desde fuente
 RUN wget https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-${ASTERISK_VERSION}.tar.gz && \
     tar xzf asterisk-${ASTERISK_VERSION}.tar.gz && \
-    cd asterisk-${ASTERISK_VERSION} && \
+    DIR=$(tar tzf asterisk-${ASTERISK_VERSION}.tar.gz | head -1 | cut -f1 -d "/") && \
+    echo "Directorio extraído: $DIR" && \
+    cd $DIR && \
     ./configure --with-pjproject-bundled --with-crypto --with-ssl --with-srtp && \
     make menuselect.makeopts && \
     menuselect/menuselect --enable app_mixmonitor menuselect.makeopts && \
