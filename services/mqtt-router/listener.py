@@ -1,8 +1,18 @@
 import paho.mqtt.client as mqtt
 import json
 from config import logger, MQTT_CFG, DB_CFG
-from db import Database
-from handlers import announce, update, alert, response, set, select, notify
+from database import db_manager
+from handlers import (
+    announce,
+    update,
+    alert,
+    response,
+    esp_set,
+    db_select,
+    notify
+)
+
+
 
 
 # Mapeo tópico_base → handler
@@ -13,14 +23,14 @@ HANDLERS = {
     "response": response.handle,
     "get": None,         # se procesan solo desde ESP32 → no hay handler aquí
     "set": None,         # idem
-    "system/get": select.handle,
-    "system/set": set.handle,
-    "system/select": select.handle,
+    "system/get": db_select,     # el handler select
+    "system/set": esp_set,       # el handler set
+    "system/select": db_select,
     "system/notify": notify.handle,
 }
 
 
-db = Database(DB_CFG)
+db = db_manager(DB_CFG)
 
 
 def resolve_handler(topic: str):
