@@ -23,4 +23,4 @@ COPY . .
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD python3 -c "import paho.mqtt.client" || exit 1
 
-CMD ["python3", ".py"]
+CMD ["python3", "listener.py"]

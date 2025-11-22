@@ -1,7 +1,8 @@
-import paho.mqtt.client as mqtt
 import json
+import sys
+import paho.mqtt.client as mqtt
 from config import logger, MQTT_CFG, DB_CFG
-from database import db_manager
+from database.db_manager import DBManager
 from handlers import (
     announce,
     update,
@@ -11,10 +12,6 @@ from handlers import (
     db_select,
     notify
 )
-
-
-
-
 # Mapeo tópico_base → handler
 HANDLERS = {
     "announce": announce.handle,
@@ -29,8 +26,8 @@ HANDLERS = {
     "system/notify": notify.handle,
 }
 
-
-db = db_manager(DB_CFG)
+# Conexión global a la BBDD para todos los handlers
+db = DBManager()
 
 
 def resolve_handler(topic: str):
@@ -105,4 +102,13 @@ def start_router():
 
 
 if __name__ == "__main__":
+    # Healthcheck simple: comprobar conexión a la DB
+    if "--healthcheck" in sys.argv:
+        test_db = DBManager()
+        if test_db.conn and test_db.conn.is_connected():
+            logger.info("[HEALTHCHECK] OK")
+            sys.exit(0)
+        logger.error("[HEALTHCHECK] Conexión a DB fallida")
+        sys.exit(1)
+
     start_router()
