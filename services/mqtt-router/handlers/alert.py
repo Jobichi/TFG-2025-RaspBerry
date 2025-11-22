@@ -22,6 +22,17 @@ def handle(db, client, topic, payload):
             logger.warning(f"[ALERT] Tipo no válido: {comp_type}")
             return
 
+        # === Asegurar existencia del dispositivo para respetar FKs ===
+        db.execute(
+            """
+            INSERT INTO devices (device_name, last_seen)
+            VALUES (%s, NOW())
+            ON DUPLICATE KEY UPDATE last_seen=NOW()
+            """,
+            (device,),
+            commit=True
+        )
+
         # === Extraer datos del payload ===
         status   = payload.get("status", "ALERT")
         message  = payload.get("message", "Sin mensaje")
@@ -37,6 +48,17 @@ def handle(db, client, topic, payload):
             if row:
                 name     = name     or row[0]["name"]
                 location = location or row[0]["location"]
+            else:
+                # Garantizar que el device exista en la tabla devices antes del insert
+                db.execute(
+                    """
+                    INSERT INTO devices (device_name, last_seen)
+                    VALUES (%s, NOW())
+                    ON DUPLICATE KEY UPDATE last_seen=NOW()
+                    """,
+                    (device,),
+                    commit=True
+                )
 
         # === Insertar en BD ===
         q_ins = """
