@@ -1,5 +1,5 @@
 from config import logger
-from handlers.utils import safe_json_dumps
+from handlers.utils import safe_json_dumps, ensure_device, ensure_component
 from datetime import datetime
 
 def handle(db, client, topic, payload):
@@ -19,6 +19,10 @@ def handle(db, client, topic, payload):
         value = payload.get("value")
         units = payload.get("units") or payload.get("unit")
         state = payload.get("state")
+
+        # Asegurar dispositivo/componente existen (por si announce no llegó antes)
+        ensure_device(db, device)
+        ensure_component(db, comp_type, device, comp_id)
 
         if comp_type == "sensor":
             if value is None:

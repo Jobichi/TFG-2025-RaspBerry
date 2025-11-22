@@ -1,5 +1,6 @@
 from config import logger
 import json
+from handlers.utils import ensure_device, ensure_component
 
 def handle(db, client, topic, payload):
     """
@@ -22,6 +23,10 @@ def handle(db, client, topic, payload):
         if comp_type not in ["sensor", "actuator"]:
             logger.warning(f"[RESPONSE] Tipo inválido: {comp_type}")
             return
+
+        # === Asegurar que existan device y componente antes de actualizar ===
+        ensure_device(db, device)
+        ensure_component(db, comp_type, device, comp_id)
 
         # === Parseo del JSON ===
         if not isinstance(payload, dict):

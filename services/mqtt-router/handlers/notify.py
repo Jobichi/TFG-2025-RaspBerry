@@ -1,6 +1,7 @@
 from config import logger
 from datetime import datetime
 import json
+from handlers.utils import ensure_device, ensure_component
 
 def handle(db, client, topic, payload):
     """
@@ -52,6 +53,17 @@ def handle(db, client, topic, payload):
                 elif comp_type not in ["sensor", "actuator"]:
                     logger.warning(f"[SYSTEM/NOTIFY] Tipo inválido: {comp_type}")
                 else:
+                    # Garantizar filas previas para que el UPDATE funcione
+                    ensure_device(db, device)
+                    ensure_component(
+                        db,
+                        comp_type,
+                        device,
+                        comp_id,
+                        payload.get("name"),
+                        payload.get("location"),
+                    )
+
                     if comp_type == "sensor":
                         value = payload.get("value")
                         unit = payload.get("units") or payload.get("unit")
