@@ -14,16 +14,17 @@ from handlers import (
 )
 # Mapeo tópico_base → handler
 HANDLERS = {
-    "announce": announce.handle,
-    "update": update.handle,
-    "alert": alert.handle,
-    "response": response.handle,
+    # Estos objetos ya son las funciones handle aliased en handlers/__init__.py
+    "announce": announce,
+    "update": update,
+    "alert": alert,
+    "response": response,
     "get": None,         # se procesan solo desde ESP32 → no hay handler aquí
     "set": None,         # idem
     "system/get": db_select,     # el handler select
     "system/set": esp_set,       # el handler set
     "system/select": db_select,
-    "system/notify": notify.handle,
+    "system/notify": notify,
 }
 
 # Conexión global a la BBDD para todos los handlers
