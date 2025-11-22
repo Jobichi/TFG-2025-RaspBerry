@@ -17,14 +17,14 @@ def handle(db, client, topic, payload):
             return
 
         value = payload.get("value")
-        unit  = payload.get("units") or payload.get("unit")
+        units = payload.get("units") or payload.get("unit")
         state = payload.get("state")
 
         if comp_type == "sensor":
             if value is None:
                 logger.warning(f"[UPDATE] Sensor sin valor ({device}/{comp_id})")
                 return
-            if unit is None:
+            if units is None:
                 logger.warning(f"[UPDATE] Sensor sin unidad ({device}/{comp_id})")
 
             query = """
@@ -32,8 +32,8 @@ def handle(db, client, topic, payload):
                 SET value=%s, unit=%s, last_seen=NOW()
                 WHERE device_name=%s AND id=%s
             """
-            db.execute(query, (value, unit, device, comp_id), commit=True)
-            logger.info(f"[DB] Sensor actualizado: {device}/{comp_id} -> {value} {unit or ''}")
+            db.execute(query, (value, units, device, comp_id), commit=True)
+            logger.info(f"[DB] Sensor actualizado: {device}/{comp_id} -> {value} {units or ''}")
 
         elif comp_type == "actuator":
             if state is None:
@@ -62,7 +62,7 @@ def handle(db, client, topic, payload):
         }
 
         if comp_type == "sensor":
-            notify_msg.update({"value": value, "unit": unit})
+            notify_msg.update({"value": value, "units": units})
         else:
             notify_msg.update({"state": state})
 

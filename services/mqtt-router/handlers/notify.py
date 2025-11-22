@@ -40,6 +40,75 @@ def handle(db, client, topic, payload):
         # === Log detallado ===
         logger.info(f"[SYSTEM/NOTIFY] [{event_type.upper()}] {payload}")
 
+        # === Persistir updates si vienen directamente por notify ===
+        if event_type == "update":
+            try:
+                device = payload.get("device")
+                comp_type = payload.get("type")
+                comp_id = payload.get("id")
+
+                if not (device and comp_type and comp_id is not None):
+                    logger.warning(f"[SYSTEM/NOTIFY] Update incompleto: {payload}")
+                elif comp_type not in ["sensor", "actuator"]:
+                    logger.warning(f"[SYSTEM/NOTIFY] Tipo inválido: {comp_type}")
+                else:
+                    if comp_type == "sensor":
+                        value = payload.get("value")
+                        unit = payload.get("units") or payload.get("unit")
+
+                        # Si no viene unidad, intentar reutilizar la que ya tenga el sensor
+                        if unit in (None, ""):
+                            try:
+                                prev = db.execute(
+                                    "SELECT unit FROM sensors WHERE device_name=%s AND id=%s LIMIT 1",
+                                    (device, comp_id),
+                                )
+                                if prev and prev[0].get("unit"):
+                                    unit = prev[0]["unit"]
+                            except Exception:
+                                # Si falla la lectura, seguimos sin unidad
+                                pass
+
+                        if value is None:
+                            logger.warning(f"[SYSTEM/NOTIFY] Sensor sin valor ({device}/{comp_id})")
+                        else:
+                            db.execute(
+                                """
+                                UPDATE sensors
+                                SET value=%s, unit=%s, last_seen=NOW()
+                                WHERE device_name=%s AND id=%s
+                                """,
+                                (value, unit, device, comp_id),
+                                commit=True
+                            )
+                            logger.info(f"[DB] Sensor (notify) actualizado: {device}/{comp_id} -> {value} {unit or ''}")
+                    else:
+                        state = payload.get("state")
+                        if state is None:
+                            logger.warning(f"[SYSTEM/NOTIFY] Actuador sin estado ({device}/{comp_id})")
+                        else:
+                            db.execute(
+                                """
+                                UPDATE actuators
+                                SET state=%s, last_seen=NOW()
+                                WHERE device_name=%s AND id=%s
+                                """,
+                                (state, device, comp_id),
+                                commit=True
+                            )
+                            logger.info(f"[DB] Actuador (notify) actualizado: {device}/{comp_id} -> {state}")
+
+                    # Mantener vivo el dispositivo si pudimos procesar algo
+                    if device:
+                        db.execute(
+                            "UPDATE devices SET last_seen=NOW() WHERE device_name=%s",
+                            (device,),
+                            commit=True
+                        )
+
+            except Exception as e:
+                logger.error(f"[SYSTEM/NOTIFY] Error persistiendo update: {e}")
+
         # === Almacenamiento opcional ===
         try:
             query = """
