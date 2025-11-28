@@ -1,6 +1,6 @@
 FROM debian:bookworm-slim
 
-ENV ASTERISK_VERSION=20-current
+ENV ASTERISK_VERSION=22-current
 ENV ASTERISK_USER=asterisk
 ENV ASTERISK_GROUP=asterisk
 
