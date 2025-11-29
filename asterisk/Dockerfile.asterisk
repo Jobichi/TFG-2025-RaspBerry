@@ -41,9 +41,12 @@ RUN mkdir -p \
         /var/log/asterisk \
         /var/spool/asterisk/voicemail \
         /var/spool/asterisk/recordings \
-        /var/run/asterisk
+        /var/run/asterisk \
+        /var/lib/asterisk
 
-# ENTRYPOINT sin chown
+RUN chown -R 200:200 /etc/asterisk /var/log/asterisk /var/spool/asterisk /var/run/asterisk /var/lib/asterisk && \
+    chmod -R 775 /etc/asterisk /var/log/asterisk /var/spool/asterisk /var/run/asterisk /var/lib/asterisk
+
 RUN echo '#!/bin/bash\n\
 set -e\n\
 echo "[Entrypoint] Iniciando Asterisk..."\n\

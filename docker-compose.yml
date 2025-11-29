@@ -196,9 +196,7 @@ services:
 
   # === ASTERISK ===
   asterisk:
-    build:
-      context: ./asterisk
-      dockerfile: Dockerfile.asterisk
+    image: andrius/asterisk:latest
     container_name: asterisk
     restart: unless-stopped
     network_mode: "host"
@@ -206,12 +204,10 @@ services:
       - ./asterisk/config:/etc/asterisk
       - ./asterisk/logs:/var/log/asterisk
       - ./asterisk/recordings:/var/spool/asterisk/recordings
-    entrypoint: ["/entrypoint.sh"]
-    healthcheck:
-      test: ["CMD", "asterisk", "-rx", "core show uptime"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
+    environment:
+      - ASTERISK_UID=1000
+      - ASTERISK_GID=1000
+
 
   # === VOSK SERVICE ===
   vosk-service:
