@@ -15,7 +15,7 @@ MQTT_BROKER = os.getenv("MQTT_HOST", "mosquitto")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER = os.getenv("MQTT_USER", "admin")
 MQTT_PASS = os.getenv("MQTT_PASS", "admin1234")
-MQTT_TOPIC_CONFIRM = os.getenv("MQTT_TOPIC_CONFIRM", "transcription/text")
+MQTT_TOPIC = os.getenv("MQTT_TOPIC", "transcription/text")
 
 # Control de detección de archivo
 CHECK_INTERVAL = 2
@@ -141,9 +141,9 @@ def start_mqtt_listener():
     client.username_pw_set(MQTT_USER, MQTT_PASS)
     client.on_message = on_message
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    client.subscribe(MQTT_TOPIC_CONFIRM)
+    client.subscribe(MQTT_TOPIC)
     client.loop_start()
-    print(f"[INFO] MQTT escuchando en {MQTT_TOPIC_CONFIRM}")
+    print(f"[INFO] MQTT escuchando en {MQTT_TOPIC}")
     return client
 
 
