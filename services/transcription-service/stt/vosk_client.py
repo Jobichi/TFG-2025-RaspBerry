@@ -55,7 +55,7 @@ class VoskClient(STTClient):
 
             await asyncio.sleep(0.01)
 
-        await ws.send('{"eof": 1}')
+        await ws.send(b'{"eof": 1}')
         print("[VOSK] Audio enviado completamente.")
 
     async def _receive_results(self, ws) -> str:
