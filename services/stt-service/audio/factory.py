@@ -1,5 +1,5 @@
-from audio.wav_processing import WavProccesor
-from audio.mp3_procesing import Mp3Processor
+from wav_processing import WavProccesor
+from mp3_procesing import Mp3Processor
 
 class AudioProcessorFactory:
     """Devuelve el procesador adeucado según la extensión del archivo de audio."""
