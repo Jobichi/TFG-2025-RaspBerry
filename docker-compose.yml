@@ -226,9 +226,12 @@ services:
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
       MQTT_TOPIC: system/transcription/text
-      VOSK_MODEL_PATH: model
+      VOSK_MODEL_PATH: /model/vosk-model-small-es-0.42
       VOSK_SAMPLE_RATE: 16000
+      WS_PORT: ${WS_VOSK}
       TZ: Europe/Madrid
+    volumes:
+      - ./models/vosk-es:/model
     depends_on:
       - mosquitto
     networks:
