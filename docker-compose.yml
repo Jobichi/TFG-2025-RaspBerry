@@ -226,12 +226,9 @@ services:
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
       MQTT_TOPIC: system/transcription/text
-      VOSK_MODEL_PATH: /model/vosk-model-small-es-0.42
+      VOSK_MODEL_PATH: model
       VOSK_SAMPLE_RATE: 16000
-      WS_PORT: ${WS_VOSK}
       TZ: Europe/Madrid
-    volumes:
-      - ./models/vosk-es:/model
     depends_on:
       - mosquitto
     networks:
@@ -268,7 +265,7 @@ services:
     container_name: transcription-service
     restart: unless-stopped
     env_file:
-      - ./.env_file
+      - ./.env
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: ${MQTT_PORT}
