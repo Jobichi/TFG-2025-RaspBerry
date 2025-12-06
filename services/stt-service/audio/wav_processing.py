@@ -1,5 +1,5 @@
 import wave
-from audio_processing import AudioProcessor
+from audio.audio_processing import AudioProcessor
 
 class WavProccesor(AudioProcessor):
     """Procesador de archivos .wav"""

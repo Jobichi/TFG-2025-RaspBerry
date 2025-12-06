@@ -1,5 +1,5 @@
 from pydub import AudioSegment
-from audio_processing import AudioProcessor
+from audio.audio_processing import AudioProcessor
 
 class Mp3Processor(AudioProcessor):
     """Procesador de archivos MP3."""
