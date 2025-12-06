@@ -235,27 +235,57 @@ services:
       - tfg_net
 
   # === STT SERVICE ===
-  stt-service:
-    build:
-      context: ./services/stt-service
-      dockerfile: Dockerfile.stt
-    container_name: stt-service
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      MQTT_HOST: mosquitto
-      MQTT_PORT: ${MQTT_PORT}
-      MQTT_USER: ${MQTT_USER}
-      MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: system/transcription/text
-    networks:
-      - tfg_net
-    volumes:
-      - ./asterisk/recordings:/asterisk/recordings
-    depends_on:
-      - vosk-service
-      - mosquitto
+  # stt-service:
+  #   build:
+  #     context: ./services/stt-service
+  #     dockerfile: Dockerfile.stt
+  #   container_name: stt-service
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     MQTT_HOST: mosquitto
+  #     MQTT_PORT: ${MQTT_PORT}
+  #     MQTT_USER: ${MQTT_USER}
+  #     MQTT_PASS: ${MQTT_PASS}
+  #     MQTT_TOPIC: system/transcription/text
+  #   networks:
+  #     - tfg_net
+  #   volumes:
+  #     - ./asterisk/recordings:/asterisk/recordings
+  #   depends_on:
+  #     - vosk-service
+  #     - mosquitto
+
+# === TRANSCRIPTION SERVICE (OLD STT) ===
+transcription-service:
+  build:
+    context: ./services/transcription-service
+    dockerfile: Dockerfile.transcription
+  container_name: transcription-service
+  restart: unless-stopped
+  env_file:
+    - ./.env_file
+  environment:
+    MQTT_HOST: mosquitto
+    MQTT_PORT: ${MQTT_PORT}
+    MQTT_USER: ${MQTT_USER}
+    MQTT_PASS: ${MQTT_PASS}
+    MQTT_TOPIC: system/transcription/text
+    STT_PROVIDER: ${STT_PROVIDER}
+  networks:
+    - tfg_net
+  volumes:
+    - ./asterisk/recordings:/asterisk/recordings
+  depends_on:
+    - vosk-service
+    - mosquitto
+  healthcheck:
+    test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('vosk-service',2700))"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+
 
   # === INTENT SERVICE ===
   # intent-service:
