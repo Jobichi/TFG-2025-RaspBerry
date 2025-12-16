@@ -1,2 +1,2 @@
-paho-mqtt==1.6.1
-rapidfuzz==3.8.1
+paho-mqtt>=2.0
+rapidfuzz>=3.0

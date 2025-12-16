@@ -1,9 +1,16 @@
 FROM python:3.11-slim
 
+# Evitar buffering de logs
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
+
+# Dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+# Código
+COPY . .
 
-CMD ["python3", "app.py"]
+# Entrypoint
+CMD ["python", "main.py"]

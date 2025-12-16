@@ -2,7 +2,13 @@ from config import logger
 from handlers.utils import safe_json_dumps
 from datetime import datetime
 
+
 def handle(db, client, topic, payload):
+    """
+    Gestiona 'announce/#' desde los ESP32.
+    Registra dinámicamente dispositivos, sensores y actuadores.
+    """
+
     try:
         # === Parsear tópico ===
         parts = topic.split("/")
@@ -12,10 +18,17 @@ def handle(db, client, topic, payload):
 
         _, device, comp_type, comp_id = parts[:4]
 
+        try:
+            comp_id = int(comp_id)
+        except ValueError:
+            logger.warning(f"[ANNOUNCE] ID inválido: {comp_id}")
+            return
+
         if comp_type not in ["sensor", "actuator"]:
             logger.warning(f"[ANNOUNCE] Tipo no válido: {comp_type}")
             return
 
+        # === Extraer datos del payload ===
         name = payload.get("name")
         location = payload.get("location")
 
@@ -23,7 +36,7 @@ def handle(db, client, topic, payload):
             logger.warning(f"[ANNOUNCE] Payload incompleto en {topic}: {payload}")
             return
 
-        # === Registrar dispositivo ===
+        # === Registrar / actualizar dispositivo ===
         db.execute(
             """
             INSERT INTO devices (device_name, last_seen)
@@ -49,7 +62,7 @@ def handle(db, client, topic, payload):
                 commit=True
             )
 
-        elif comp_type == "actuator":
+        else:  # actuator
             db.execute(
                 """
                 INSERT INTO actuators (id, device_name, name, location, last_seen)
@@ -63,9 +76,9 @@ def handle(db, client, topic, payload):
                 commit=True
             )
 
-        logger.info(f"[DB] {comp_type.capitalize()} registrado: {device}/{comp_id}")
+        logger.info(f"[DB][ANNOUNCE] {comp_type} registrado: {device}/{comp_id}")
 
-        # === Publicar confirmación ===
+        # === Publicar confirmación (QoS 1) ===
         confirm_msg = {
             "device": device,
             "type": comp_type,
@@ -76,7 +89,12 @@ def handle(db, client, topic, payload):
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        client.publish(f"system/notify/{device}/announce", safe_json_dumps(confirm_msg))
+        client.publish(
+            f"system/notify/{device}/announce",
+            safe_json_dumps(confirm_msg),
+            qos=1
+        )
+
         logger.info(f"[ANNOUNCE] Notificación enviada -> system/notify/{device}/announce")
 
     except Exception as e:

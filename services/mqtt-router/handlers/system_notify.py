@@ -95,10 +95,17 @@ def handle(db, client, topic, payload):
                             )
                             logger.info(f"[DB] Sensor (notify) actualizado: {device}/{comp_id} -> {value} {unit or ''}")
                     else:
-                        state = payload.get("state")
-                        if state is None:
+                        raw_state = payload.get("state")
+
+                        if raw_state is None:
                             logger.warning(f"[SYSTEM/NOTIFY] Actuador sin estado ({device}/{comp_id})")
                         else:
+                            if isinstance(raw_state, str):
+                                raw_state = raw_state.strip().lower()
+                                state = raw_state in ["1", "true", "on", "enabled"]
+                            else:
+                                state = bool(raw_state)
+
                             db.execute(
                                 """
                                 UPDATE actuators
@@ -108,7 +115,9 @@ def handle(db, client, topic, payload):
                                 (state, device, comp_id),
                                 commit=True
                             )
-                            logger.info(f"[DB] Actuador (notify) actualizado: {device}/{comp_id} -> {state}")
+                            logger.info(
+                                f"[DB] Actuador (notify) actualizado: {device}/{comp_id} -> {state}"
+                            )
 
                     # Mantener vivo el dispositivo si pudimos procesar algo
                     if device:

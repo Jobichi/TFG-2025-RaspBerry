@@ -3,10 +3,11 @@ import json
 from datetime import datetime
 from handlers.utils import safe_json_dumps
 
+
 def handle(db, client, topic, payload):
     """
     Gestiona 'system/set/#' desde los microservicios internos.
-    Valida datos y reenvía la orden al ESP32.
+    Valida datos, normaliza comandos a booleanos y reenvía la orden al ESP32.
     """
 
     try:
@@ -17,11 +18,12 @@ def handle(db, client, topic, payload):
         # === Extraer valores ===
         device = payload.get("device")
         comp_type = str(payload.get("type", "")).strip().lower()
+
         comp_id = payload.get("id")
         comp_id = int(comp_id) if comp_id is not None else None
 
-        # Comando: state (actuadores) o enabled (sensores)
-        raw_cmd = payload.get("state", payload.get("enabled"))
+        # Comando: state (actuadores) o enable (sensores)
+        raw_cmd = payload.get("state", payload.get("enable"))
 
         if not (device and comp_type and comp_id is not None and raw_cmd is not None):
             logger.warning(f"[SYSTEM/SET] Petición incompleta -> {payload}")
@@ -44,7 +46,8 @@ def handle(db, client, topic, payload):
             }
             client.publish(
                 f"system/response/{requester}/{comp_type}/{device}/{comp_id}",
-                json.dumps(error)
+                json.dumps(error),
+                qos=1
             )
             return
 
@@ -53,26 +56,30 @@ def handle(db, client, topic, payload):
 
         # === Preparar payload para ESP32 ===
         esp_topic = f"set/{device}/{comp_type}/{comp_id}"
-        forward_payload = {"requester": requester}
+        forward_payload = {
+            "requester": requester
+        }
 
-        # === Procesar comando ===
+        # === Normalización a booleanos ===
+        if isinstance(raw_cmd, str):
+            raw_cmd = raw_cmd.strip().lower()
+            value = raw_cmd in ["1", "true", "on", "enabled"]
+        else:
+            value = bool(raw_cmd)
+
         if comp_type == "actuator":
-            # Normalizar string a formato correcto
-            command = str(raw_cmd).upper()
-            forward_payload["state"] = command
+            forward_payload["state"] = value
+            command = value
+        else:
+            forward_payload["enable"] = value
+            command = value
 
-        else:  # sensor
-            if isinstance(raw_cmd, str):
-                raw_cmd = raw_cmd.lower().strip()
-                enabled = raw_cmd in ["1", "true", "on", "enabled"]
-            else:
-                enabled = bool(raw_cmd)
-
-            command = enabled
-            forward_payload["enabled"] = enabled
-
-        # === Publicar al ESP32 ===
-        client.publish(esp_topic, json.dumps(forward_payload))
+        # === Publicar al ESP32 (QoS 1) ===
+        client.publish(
+            esp_topic,
+            json.dumps(forward_payload),
+            qos=1
+        )
         logger.info(f"[SET] Enviado -> {esp_topic} ({command})")
 
         # === Actualizar BD (solo actuadores) ===
@@ -94,19 +101,23 @@ def handle(db, client, topic, payload):
             commit=True
         )
 
-        # === Publicar notificación del set ===
+        # === Publicar notificación global (QoS 1) ===
         notify_msg = {
             "device": device,
             "type": comp_type,
             "id": comp_id,
             "name": name,
             "location": location,
-            "command": command,
+            "value": command,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "source": requester
         }
 
-        client.publish("system/notify/set", safe_json_dumps(notify_msg))
+        client.publish(
+            "system/notify/set",
+            safe_json_dumps(notify_msg),
+            qos=1
+        )
         logger.info("[NOTIFY] Publicado -> system/notify/set")
 
     except Exception as e:

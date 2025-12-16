@@ -2,7 +2,7 @@
 
 import os
 
-# Archivo de audio o webshocket
+# Archivo de audio y webshocket
 RECORDING_PATH = "/asterisk/recordings/grabacion.wav16"
 VOSK_WS = "ws://vosk-service:2700"
 

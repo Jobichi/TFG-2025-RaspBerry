@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS devices (
   last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-
 -- ================================
 --  TABLA: sensors
 -- ================================
@@ -21,8 +20,11 @@ CREATE TABLE IF NOT EXISTS sensors (
   device_name VARCHAR(64) NOT NULL,
   name VARCHAR(64),
   location VARCHAR(64),
+
+  enabled BOOLEAN DEFAULT TRUE,
   value FLOAT,
   unit VARCHAR(16),
+
   last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (id, device_name),
@@ -32,9 +34,7 @@ CREATE TABLE IF NOT EXISTS sensors (
     ON DELETE CASCADE
 );
 
--- Índice para búsquedas rápidas
 CREATE INDEX idx_sensors_device ON sensors(device_name);
-
 
 -- ================================
 --  TABLA: actuators
@@ -44,7 +44,9 @@ CREATE TABLE IF NOT EXISTS actuators (
   device_name VARCHAR(64) NOT NULL,
   name VARCHAR(64),
   location VARCHAR(64),
-  state VARCHAR(128),
+
+  state BOOLEAN DEFAULT FALSE,
+
   last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (id, device_name),
@@ -54,9 +56,7 @@ CREATE TABLE IF NOT EXISTS actuators (
     ON DELETE CASCADE
 );
 
--- Índice para búsquedas rápidas
 CREATE INDEX idx_actuators_device ON actuators(device_name);
-
 
 -- ================================
 --  TABLA: alerts
@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS alerts (
   id INT AUTO_INCREMENT PRIMARY KEY,
 
   device_name VARCHAR(64) NOT NULL,
-  component_type VARCHAR(16),    -- 'sensor' o 'actuator'
-  component_id INT,              -- ID dentro del ESP32
+  component_type VARCHAR(16),    -- 'sensor' | 'actuator'
+  component_id INT,
   component_name VARCHAR(64),
   location VARCHAR(64),
 
@@ -81,10 +81,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     ON DELETE CASCADE
 );
 
--- Índices recomendados
 CREATE INDEX idx_alerts_severity ON alerts(severity, timestamp);
 CREATE INDEX idx_alerts_device ON alerts(device_name);
-
 
 -- ================================
 --  TABLA: system_logs (opcional)
@@ -97,6 +95,5 @@ CREATE TABLE IF NOT EXISTS system_logs (
   payload JSON
 );
 
--- Índices útiles
 CREATE INDEX idx_logs_event ON system_logs(event_type);
 CREATE INDEX idx_logs_topic ON system_logs(topic);
