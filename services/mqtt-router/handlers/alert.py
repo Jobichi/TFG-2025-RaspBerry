@@ -6,7 +6,7 @@ from datetime import datetime
 def handle(db, client, topic, payload):
     """
     Gestiona 'alert/#' desde los ESP32.
-    Registra la alerta en BD y notifica al sistema.
+    Mantiene únicamente la alerta más reciente por componente.
     """
 
     try:
@@ -24,7 +24,7 @@ def handle(db, client, topic, payload):
             logger.warning(f"[ALERT] ID inválido: {comp_id}")
             return
 
-        if comp_type not in ["sensor", "actuator"]:
+        if comp_type not in ("sensor", "actuator"):
             logger.warning(f"[ALERT] Tipo no válido: {comp_type}")
             return
 
@@ -49,48 +49,72 @@ def handle(db, client, topic, payload):
 
         # === Resolver name/location si no vienen en payload ===
         if not name or not location:
-            q = f"SELECT name, location FROM {comp_type}s WHERE device_name=%s AND id=%s"
-            row = db.execute(q, (device, comp_id))
+            row = db.execute(
+                f"SELECT name, location FROM {comp_type}s WHERE device_name=%s AND id=%s",
+                (device, comp_id)
+            )
             if row:
                 name     = name     or row[0]["name"]
                 location = location or row[0]["location"]
 
-        # === Insertar alerta en BD ===
+        # === Upsert de alerta (solo la más reciente) ===
         db.execute(
             """
-            INSERT INTO alerts (device_name, component_type, component_id,
-                                component_name, location,
-                                status, message, severity, code, timestamp)
+            INSERT INTO alerts (
+                device_name,
+                component_type,
+                component_id,
+                component_name,
+                location,
+                status,
+                message,
+                severity,
+                code,
+                timestamp
+            )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE
+                component_name = VALUES(component_name),
+                location       = VALUES(location),
+                status         = VALUES(status),
+                message        = VALUES(message),
+                severity       = VALUES(severity),
+                code           = VALUES(code),
+                timestamp      = NOW()
             """,
             (
-                device, comp_type, comp_id,
-                name, location,
-                status, message, severity, code
+                device,
+                comp_type,
+                comp_id,
+                name,
+                location,
+                status,
+                message,
+                severity,
+                code
             ),
             commit=True
         )
 
         logger.info(
-            f"[DB][ALERT] {device}/{comp_type}/{comp_id} "
+            f"[DB][ALERT] Estado actualizado: {device}/{comp_type}/{comp_id} "
             f"[{severity.upper()}] {message}"
         )
 
-        # === Construir notificación ===
+        # === Publicar notificación ===
         alert_msg = {
-            "device":   device,
-            "type":     comp_type,
-            "id":       comp_id,
-            "name":     name,
+            "device": device,
+            "type": comp_type,
+            "id": comp_id,
+            "name": name,
             "location": location,
-            "status":   status,
+            "status": status,
             "severity": severity,
-            "message":  message,
-            "code":     code,
+            "message": message,
+            "code": code,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        # === Publicar notificación (QoS 1) ===
         client.publish(
             "system/notify/alert",
             safe_json_dumps(alert_msg),

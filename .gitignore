@@ -93,7 +93,7 @@ wheels/
 *.tmp
 
 # ==========================
-#   CONFIG PERSONAL OPCIONAL
+#   CONFIG PERSONAL 
 # ==========================
-# Puedes descomentar si trabajas con VS Code en remoto:
-# .devcontainer/
+
+.wav16

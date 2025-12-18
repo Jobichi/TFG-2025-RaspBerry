@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS alerts (
   id INT AUTO_INCREMENT PRIMARY KEY,
 
   device_name VARCHAR(64) NOT NULL,
-  component_type VARCHAR(16),    -- 'sensor' | 'actuator'
-  component_id INT,
+  component_type VARCHAR(16) NOT NULL,   -- 'sensor' | 'actuator'
+  component_id INT NOT NULL,
   component_name VARCHAR(64),
   location VARCHAR(64),
 
@@ -76,13 +76,22 @@ CREATE TABLE IF NOT EXISTS alerts (
   code INT,
   timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
+  UNIQUE KEY uniq_alert_component (
+    device_name,
+    component_type,
+    component_id
+  ),
+
   FOREIGN KEY (device_name)
     REFERENCES devices(device_name)
     ON DELETE CASCADE
 );
 
-CREATE INDEX idx_alerts_severity ON alerts(severity, timestamp);
-CREATE INDEX idx_alerts_device ON alerts(device_name);
+CREATE INDEX idx_alerts_severity
+  ON alerts(severity, timestamp);
+
+CREATE INDEX idx_alerts_device
+  ON alerts(device_name);
 
 -- ================================
 --  TABLA: system_logs (opcional)

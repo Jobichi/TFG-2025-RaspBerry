@@ -130,17 +130,25 @@ def handle(db, client, topic, payload):
             except Exception as e:
                 logger.error(f"[SYSTEM/NOTIFY] Error persistiendo update: {e}")
 
-        # === Almacenamiento opcional ===
-        try:
-            query = """
-                INSERT INTO system_logs (timestamp, topic, event_type, payload)
-                VALUES (%s, %s, %s, %s)
-            """
-            db.execute(query, (timestamp, topic, event_type, json.dumps(payload)), commit=True)
-
-        except Exception:
-            # Si la tabla no existe o no deseas logs persistentes → ignoramos
-            pass
+        # === Persistencia selectiva ===
+        if event_type in ("announce", "alert"):
+            try:
+                query = """
+                    INSERT INTO system_logs (timestamp, topic, event_type, payload)
+                    VALUES (%s, %s, %s, %s)
+                """
+                db.execute(
+                    query,
+                    (timestamp, topic, event_type, json.dumps(payload)),
+                    commit=True
+                )
+                logger.info(
+                    f"[SYSTEM/NOTIFY] Evento '{event_type}' persistido en system_logs"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[SYSTEM/NOTIFY] Error guardando log '{event_type}': {e}"
+                )
 
     except Exception as e:
         logger.error(f"[SYSTEM/NOTIFY] Error procesando notificación: {e}")
