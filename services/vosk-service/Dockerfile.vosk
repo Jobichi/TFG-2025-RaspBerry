@@ -2,25 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dependencias necesarias
+# Dependencias del sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget unzip libatomic1 && \
-    rm -rf /var/lib/apt/lists/*
+    libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements primero (para mejor cache de Docker)
+# Dependencias Python
 COPY requirements.txt .
-
-# Instalar dependencias Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Descargar y descomprimir modelo español pequeño
-RUN wget https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip -O model.zip && \
-    unzip -q model.zip && \
-    mv vosk-model-small-es-0.42 model && \
-    rm model.zip
-
-# Copiar el servidor
+# Código
 COPY server_ws.py .
 
 EXPOSE 2700
+
 CMD ["python", "server_ws.py"]

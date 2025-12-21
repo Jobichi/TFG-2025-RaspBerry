@@ -57,70 +57,15 @@ services:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
-    healthcheck:
-      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p ${MQTT_PORT:-1883} -u ${MQTT_USER:-user} -P ${MQTT_PASS:-pass} -t health/check -m ok || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     networks:
       - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
 
-  # === SERVICIO PONG (TEST MQTT) ===
-  pong-service:
+  # === MQTT ROUTER ===
+  mqtt-router:
     build:
-      context: ./services/pong-service
-      dockerfile: Dockerfile.pong
-    container_name: pong-service
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      MQTT_HOST: mosquitto
-      MQTT_PORT: ${MQTT_PORT}
-      MQTT_USER: ${MQTT_USER}
-      MQTT_PASS: ${MQTT_PASS}
-      TZ: Europe/Madrid
-    depends_on:
-      mosquitto:
-        condition: service_healthy
-    networks:
-      - tfg_net
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.2"
-          memory: 128M
-
-  # === LISTENER (PERSISTE announce/# EN LA DB) ===
-  mqtt-listener:
-    build:
-      context: ./services/mqtt-listener
-      dockerfile: Dockerfile.listener
-    container_name: mqtt-listener
+      context: ./services/mqtt-router
+      dockerfile: Dockerfile.router
+    container_name: mqtt-router
     restart: unless-stopped
     env_file:
       - ./.env
@@ -130,36 +75,27 @@ services:
       DB_PASS: ${MYSQL_PASSWORD}
       DB_NAME: ${MYSQL_DATABASE}
       MQTT_HOST: mosquitto
-      MQTT_PORT: ${MQTT_PORT}
-      MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: announce/#
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PORT: ${MQTT_PORT}
       TZ: Europe/Madrid
     depends_on:
       mariadb-service:
         condition: service_healthy
       mosquitto:
-        condition: service_healthy
+        condition: service_started
     networks:
       - tfg_net
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    healthcheck:
+      test: ["CMD", "python3", "listener.py", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.4"
-          memory: 256M
 
   # === TELEGRAM BOT ===
   telegram:
@@ -178,9 +114,7 @@ services:
 
   # === ASTERISK ===
   asterisk:
-    build:
-      context: ./asterisk
-      dockerfile: Dockerfile.asterisk
+    image: andrius/asterisk:latest
     container_name: asterisk
     restart: unless-stopped
     network_mode: "host"
@@ -188,17 +122,10 @@ services:
       - ./asterisk/config:/etc/asterisk
       - ./asterisk/logs:/var/log/asterisk
       - ./asterisk/recordings:/var/spool/asterisk/recordings
-    entrypoint: >
-      /bin/bash -c "
-        chown -R 200:200 /var/log/asterisk /var/spool/asterisk/recordings &&
-        chmod -R 775 /var/log/asterisk /var/spool/asterisk/recordings &&
-        exec /usr/sbin/asterisk -f -U asterisk
-      "
-    healthcheck:
-      test: ["CMD", "asterisk", "-rx", "core show uptime"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
+    environment:
+      - ASTERISK_UID=1000
+      - ASTERISK_GID=1000
+
 
   # === VOSK SERVICE ===
   vosk-service:
@@ -216,28 +143,19 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: transcription/text
-      VOSK_MODEL_PATH: model
+      MQTT_TOPIC: system/transcription/text
+      VOSK_MODEL_PATH: /models/vosk
       VOSK_SAMPLE_RATE: 16000
       TZ: Europe/Madrid
+    volumes: # Descomentar el que se quiere usar y comentar el otro.
+      - ./models/vosk-es/vosk-model-es-0.42:/models/vosk
+      # - ./models/vosk-es/vosk-model-small-es-0.42:/models/vosk
     depends_on:
-      mosquitto:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import websockets; import asyncio; async def test(): async with websockets.connect('ws://localhost:2700') as ws: pass; asyncio.run(test())"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - mosquitto
     networks:
       - tfg_net
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
 
-  # === STT SERVICE ===
+  # === STT-SERVICE ===
   stt-service:
     build:
       context: ./services/stt-service
@@ -251,7 +169,8 @@ services:
       MQTT_PORT: ${MQTT_PORT}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASS: ${MQTT_PASS}
-      MQTT_TOPIC: transcription/text
+      MQTT_TOPIC: system/transcription/text
+      STT_PROVIDER: ${STT_PROVIDER}
     networks:
       - tfg_net
     volumes:
@@ -259,22 +178,29 @@ services:
     depends_on:
       - vosk-service
       - mosquitto
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('vosk-service',2700))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
+
+  #=== INTENT SERVICE ===
   intent-service:
     build:
-      context: ./services/mqtt-router
-      dockerfile: Dockerfile.router
+      context: ./services/intent-service
+      dockerfile: Dockerfile.intent
     container_name: intent-service
     restart: unless-stopped
     depends_on:
       - mosquitto
-    env_file:
-      - ./.env
     environment:
       MQTT_HOST: mosquitto
-      MQTT_PORT: ${MQTT_PORT}
-      MQTT_USER: ${MQTT_USER}
-      MQTT_PASS: ${MQTT_PASS}
+      MQTT_PORT: 1883
+      MQTT_USER: admin
+      MQTT_PASS: admin1234
+      LOG_LEVEL: INFO
+      SNAPSHOT_TIMEOUT_S: 5
     networks:
       - tfg_net
 

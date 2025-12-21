@@ -1,39 +1,108 @@
+-- ================================
+--  BASE DE DATOS PRINCIPAL
+-- ================================
 CREATE DATABASE IF NOT EXISTS devices_db;
 USE devices_db;
 
--- === Tabla de dispositivos registrados ===
+-- ================================
+--  TABLA: devices
+-- ================================
 CREATE TABLE IF NOT EXISTS devices (
   device_name VARCHAR(64) PRIMARY KEY,
   last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- === Tabla de sensores ===
+-- ================================
+--  TABLA: sensors
+-- ================================
 CREATE TABLE IF NOT EXISTS sensors (
-  id INT,
-  device_name VARCHAR(64),
+  id INT NOT NULL,
+  device_name VARCHAR(64) NOT NULL,
   name VARCHAR(64),
   location VARCHAR(64),
-  state VARCHAR(128),
-  PRIMARY KEY (id, device_name)
+
+  enabled BOOLEAN DEFAULT TRUE,
+  value FLOAT,
+  unit VARCHAR(16),
+
+  last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id, device_name),
+
+  FOREIGN KEY (device_name)
+    REFERENCES devices(device_name)
+    ON DELETE CASCADE
 );
 
--- === Tabla de actuadores ===
+CREATE INDEX idx_sensors_device ON sensors(device_name);
+
+-- ================================
+--  TABLA: actuators
+-- ================================
 CREATE TABLE IF NOT EXISTS actuators (
-  id INT,
-  device_name VARCHAR(64),
+  id INT NOT NULL,
+  device_name VARCHAR(64) NOT NULL,
   name VARCHAR(64),
   location VARCHAR(64),
-  state VARCHAR(128),
-  PRIMARY KEY (id, device_name)
+
+  state BOOLEAN DEFAULT FALSE,
+
+  last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id, device_name),
+
+  FOREIGN KEY (device_name)
+    REFERENCES devices(device_name)
+    ON DELETE CASCADE
 );
 
--- === Tabla de alertas ===
+CREATE INDEX idx_actuators_device ON actuators(device_name);
+
+-- ================================
+--  TABLA: alerts
+-- ================================
 CREATE TABLE IF NOT EXISTS alerts (
   id INT AUTO_INCREMENT PRIMARY KEY,
+
   device_name VARCHAR(64) NOT NULL,
-  component_name VARCHAR(64) NOT NULL,
+  component_type VARCHAR(16) NOT NULL,   -- 'sensor' | 'actuator'
+  component_id INT NOT NULL,
+  component_name VARCHAR(64),
   location VARCHAR(64),
-  state VARCHAR(128),
+
+  status VARCHAR(128),
   message TEXT,
-  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  severity VARCHAR(16) DEFAULT 'medium',
+  code INT,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  UNIQUE KEY uniq_alert_component (
+    device_name,
+    component_type,
+    component_id
+  ),
+
+  FOREIGN KEY (device_name)
+    REFERENCES devices(device_name)
+    ON DELETE CASCADE
 );
+
+CREATE INDEX idx_alerts_severity
+  ON alerts(severity, timestamp);
+
+CREATE INDEX idx_alerts_device
+  ON alerts(device_name);
+
+-- ================================
+--  TABLA: system_logs (opcional)
+-- ================================
+CREATE TABLE IF NOT EXISTS system_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  timestamp DATETIME NOT NULL,
+  topic VARCHAR(255),
+  event_type VARCHAR(50),
+  payload JSON
+);
+
+CREATE INDEX idx_logs_event ON system_logs(event_type);
+CREATE INDEX idx_logs_topic ON system_logs(topic);
