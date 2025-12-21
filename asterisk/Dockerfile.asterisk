@@ -1,44 +1,29 @@
-# Imagen base
 FROM debian:bookworm-slim
 
-ENV ASTERISK_VERSION=22.6.0
+ENV ASTERISK_VERSION=22-current
 ENV ASTERISK_USER=asterisk
 ENV ASTERISK_GROUP=asterisk
 
-# Crear usuario y grupo con UID/GID fijos (compatibles con el host)
 RUN groupadd -g 200 ${ASTERISK_GROUP} && \
     useradd -r -u 200 -g 200 -d /var/lib/asterisk -s /sbin/nologin ${ASTERISK_USER}
 
-# Instalación de dependencias necesarias
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    wget \
-    curl \
-    git \
-    subversion \
-    libssl-dev \
-    libedit-dev \
-    uuid-dev \
-    libjansson-dev \
-    libxml2-dev \
-    libsqlite3-dev \
-    pkg-config \
-    libncurses5-dev \
-    libasound2-dev \
-    libcurl4-openssl-dev \
-    libspeex-dev \
-    libspeexdsp-dev \
-    libsrtp2-dev \
-    ca-certificates \
-    bash \
+    build-essential wget curl git subversion \
+    libssl-dev libedit-dev uuid-dev libjansson-dev \
+    libxml2-dev libsqlite3-dev pkg-config \
+    libncurses5-dev libasound2-dev \
+    libcurl4-openssl-dev libspeex-dev \
+    libspeexdsp-dev libsrtp2-dev \
+    ca-certificates bash \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src
 
-# Descarga y compilación de Asterisk desde fuente
 RUN wget https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-${ASTERISK_VERSION}.tar.gz && \
     tar xzf asterisk-${ASTERISK_VERSION}.tar.gz && \
-    cd asterisk-${ASTERISK_VERSION} && \
+    DIR=$(tar tzf asterisk-${ASTERISK_VERSION}.tar.gz | head -1 | cut -f1 -d "/") && \
+    echo "Directorio extraído: $DIR" && \
+    cd $DIR && \
     ./configure --with-pjproject-bundled --with-crypto --with-ssl --with-srtp && \
     make menuselect.makeopts && \
     menuselect/menuselect --enable app_mixmonitor menuselect.makeopts && \
@@ -51,32 +36,25 @@ RUN wget https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-${ASTERI
     make config && \
     ldconfig
 
-# Crear estructura necesaria y corregir permisos
 RUN mkdir -p \
         /etc/asterisk \
         /var/log/asterisk \
         /var/spool/asterisk/voicemail \
         /var/spool/asterisk/recordings \
-        /var/run/asterisk && \
-    chown -R ${ASTERISK_USER}:${ASTERISK_GROUP} /var/*/asterisk && \
-    chmod -R 775 /var/*/asterisk
+        /var/run/asterisk \
+        /var/lib/asterisk
 
-# Script de entrada para corregir permisos de volúmenes antes de ejecutar Asterisk
+RUN chown -R 200:200 /etc/asterisk /var/log/asterisk /var/spool/asterisk /var/run/asterisk /var/lib/asterisk && \
+    chmod -R 775 /etc/asterisk /var/log/asterisk /var/spool/asterisk /var/run/asterisk /var/lib/asterisk
+
 RUN echo '#!/bin/bash\n\
 set -e\n\
-echo "[Entrypoint] Corrigiendo permisos..."\n\
-chown -R ${ASTERISK_USER}:${ASTERISK_GROUP} /var/log/asterisk /var/spool/asterisk/recordings || true\n\
-chmod -R 775 /var/log/asterisk /var/spool/asterisk/recordings || true\n\
 echo "[Entrypoint] Iniciando Asterisk..."\n\
-exec /usr/sbin/asterisk -f -U ${ASTERISK_USER}\n' > /entrypoint.sh && \
-    chmod +x /entrypoint.sh
-
-# Establecer usuario no root por defecto
-USER ${ASTERISK_USER}
+exec /usr/sbin/asterisk -f -U asterisk\n' \
+> /entrypoint.sh && chmod +x /entrypoint.sh
 
 WORKDIR /etc/asterisk
 
-# Exponer puertos SIP y RTP
 EXPOSE 5060/udp 5060/tcp 10000-10100/udp
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -8,15 +8,21 @@ MQTT_CFG = {
     "user": os.getenv("MQTT_USER", "admin"),
     "password": os.getenv("MQTT_PASS", "admin1234"),
     "topics": [
+        # --- Tráfico desde los ESP32 ---
         ("announce/#", 0),
         ("update/#", 0),
         ("alert/#", 0),
         ("get/#", 0),
         ("set/#", 0),
         ("response/#", 0),
+
+        # --- Tráfico interno entre servicios ---
         ("system/get/#", 0),
         ("system/select/#", 0),
         ("system/set/#", 0),
+
+        # --- Notificaciones internas del sistema ---
+        ("system/notify/#", 0),
     ]
 }
 
