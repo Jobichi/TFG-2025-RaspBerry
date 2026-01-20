@@ -1,9 +1,5 @@
-import time
-import threading
-
 from config import (
     logger,
-    SNAPSHOT_TIMEOUT_S,
     REQUIRE_SNAPSHOT
 )
 from mqtt.mqtt_client import MQTTClient
@@ -29,7 +25,9 @@ class IntentService:
         self.builder = CommandBuilder()
 
 
-        self._snapshot_timer = None
+        # Snapshot se construye de forma reactiva a partir de:
+        # - system/response/<service>/... (volcado inicial)
+        # - system/notify/+/announce (eventos incrementales)
 
     # ==========================================================
     #  ARRANQUE
@@ -40,42 +38,8 @@ class IntentService:
         # Conectar MQTT
         self.mqtt.connect()
 
-        # Arrancar temporizador de snapshot
-        self._start_snapshot_timer()
-
         # Entrar en loop MQTT (bloqueante)
         self.mqtt.loop_forever()
-
-    def _start_snapshot_timer(self):
-        """
-        Lanza un temporizador para marcar el snapshot como completo
-        tras SNAPSHOT_TIMEOUT_S segundos.
-        """
-        if SNAPSHOT_TIMEOUT_S <= 0:
-            logger.warning("[INTENT] SNAPSHOT_TIMEOUT_S <= 0, snapshot inmediato")
-            self.snapshot.mark_complete()
-            return
-
-        logger.info(
-            f"[INTENT] Esperando snapshot ({SNAPSHOT_TIMEOUT_S}s)"
-        )
-
-        self._snapshot_timer = threading.Timer(
-            SNAPSHOT_TIMEOUT_S,
-            self._on_snapshot_timeout
-        )
-        self._snapshot_timer.daemon = True
-        self._snapshot_timer.start()
-
-    def _on_snapshot_timeout(self):
-        """
-        Se ejecuta cuando expira el tiempo de espera del snapshot.
-        """
-        if not self.snapshot.is_ready():
-            logger.info(
-                "[INTENT] Timeout alcanzado. Marcando snapshot como completo"
-            )
-            self.snapshot.mark_complete()
 
     # ==========================================================
     #  CALLBACKS MQTT
@@ -83,10 +47,15 @@ class IntentService:
     def on_router_response(self, topic: str, payload: dict):
         self.snapshot.ingest(topic, payload)
 
-        # Marcar snapshot como listo en cuanto sea usable
-        if not self.snapshot.is_ready() and self.snapshot.is_usable():
-            logger.info("[INTENT] Snapshot usable detectado")
-            self.snapshot.mark_complete()
+        # El snapshot se considera listo cuando es "usable".
+        # (No se usa timeout para marcarlo como completo.)
+        if self.snapshot.is_ready():
+            return
+
+        if self.snapshot.is_usable():
+            logger.info("[INTENT] Snapshot usable detectado (reactivo)")
+            # No forzamos "completo"; solo habilitamos el servicio.
+            self.snapshot.mark_ready("respuesta router")
 
     def on_transcription(self, payload: dict):
         text = payload.get("text")

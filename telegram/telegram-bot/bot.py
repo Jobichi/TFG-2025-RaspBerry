@@ -6,12 +6,7 @@ import time
 import threading
 import paho.mqtt.client as mqtt
 
-from telegram import (
-    Update,
-    ReplyKeyboardMarkup,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -40,26 +35,65 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER = os.getenv("MQTT_USER", "admin")
 MQTT_PASS = os.getenv("MQTT_PASS", "admin1234")
 
-# IMPORTANTE:
-# - El router usa requester = parts[2] en system/select/<requester>
-# - Y responde en system/response/<requester>/...
-REQUESTER = os.getenv("MQTT_REQUESTER", "telegram")
+# IMPORTANTE: Debe coincidir con el "requester" al que publica mqtt-router en system/response/<requester>/...
+SERVICE_NAME = os.getenv("MQTT_SERVICE_NAME", "telegram-service")
 
-TOPIC_SELECT = f"system/select/{REQUESTER}"
-TOPIC_GET = f"system/get/{REQUESTER}"
-TOPIC_SET = f"system/set/{REQUESTER}"
+TOPIC_SELECT = f"system/select/{SERVICE_NAME}"
+TOPIC_GET = f"system/get/{SERVICE_NAME}"
+TOPIC_SET = f"system/set/{SERVICE_NAME}"
 
-TOPIC_RESPONSE_PREFIX = f"system/response/{REQUESTER}/"
+TOPIC_RESPONSE_PREFIX = f"system/response/{SERVICE_NAME}/"
 TOPIC_NOTIFY_ALERT = "system/notify/alert"
 
 mqtt_client = None
+mqtt_connected = threading.Event()
 
-# Cache inventario BBDD:
-# device_cache["sensors"][device_name] = [ {row}, {row}, ... ]
+# Cache de inventario (desde BBDD via system/select)
 device_cache = {"sensors": {}, "actuators": {}}
 
-# Sesiones por usuario (guardamos chat_id para responder bien)
+# Sesiones por usuario: control básico de “pending”
 user_sessions = {}
+
+# =========================
+# HELPERS / NORMALIZERS
+# =========================
+def normalize_bool_state(value):
+    """
+    Normaliza estados/booleanos desde bool, numérico o texto.
+    Devuelve True/False.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        v = value.strip().lower()
+        return v in ("1", "true", "on", "yes", "active", "enabled")
+    return False
+
+
+def get_enabled_field(d, default=None):
+    """
+    Acepta 'enabled' o 'enable' y lo normaliza a bool.
+    Si no existe ninguno, devuelve default.
+    """
+    if not isinstance(d, dict):
+        return default
+    if "enabled" in d:
+        return normalize_bool_state(d.get("enabled"))
+    if "enable" in d:
+        return normalize_bool_state(d.get("enable"))
+    return default
+
+
+def normalize_inventory_payload(data):
+    """
+    Normaliza payloads de inventario para que siempre exista la clave 'enabled'
+    cuando el broker mande 'enable' (sin 'd').
+    """
+    if isinstance(data, dict) and "enabled" not in data and "enable" in data:
+        data["enabled"] = data.get("enable")
+    return data
 
 
 # =========================
@@ -88,7 +122,8 @@ def build_device_menu(req_type):
     keyboard = []
     for dev in devices:
         components = device_cache[req_type].get(dev, [])
-        keyboard.append([InlineKeyboardButton(f"{dev} ({len(components)})", callback_data=f"device|{req_type}|{dev}")])
+        button_text = f"{dev} ({len(components)})"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"device|{req_type}|{dev}")])
 
     keyboard.append([InlineKeyboardButton("Actualizar", callback_data=f"refresh|{req_type}")])
     keyboard.append([InlineKeyboardButton("Volver", callback_data="main_menu")])
@@ -108,9 +143,8 @@ def build_component_menu(req_type, device):
 
     keyboard = []
     for item in items:
-        name = item.get("name", "SinNombre")
-        cid = item.get("id", "N/A")
-        keyboard.append([InlineKeyboardButton(f"{name} (ID {cid})", callback_data=f"component|{req_type}|{device}|{cid}")])
+        button_text = f"{item.get('name', 'SinNombre')} (ID {item.get('id')})"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"component|{req_type}|{device}|{item['id']}")])
 
     keyboard.append(
         [
@@ -129,23 +163,28 @@ def get_user_session(user_id):
         user_sessions[user_id] = {
             "last_action": time.time(),
             "pending_requests": set(),  # {"sensors","actuators","alerts"}
-            "chat_id": None,
+            "last_chat_id": None,       # para responder al chat correcto
         }
     return user_sessions[user_id]
 
 
-def touch_session(user_id, chat_id=None):
-    s = get_user_session(user_id)
-    s["last_action"] = time.time()
+def update_user_session(user_id, chat_id=None):
+    session = get_user_session(user_id)
+    session["last_action"] = time.time()
     if chat_id is not None:
-        s["chat_id"] = chat_id
-    return s
+        session["last_chat_id"] = chat_id
+    return session
 
 
 # =========================
 # MQTT PUBLISH HELPERS
 # =========================
 def mqtt_select(request, device=None, comp_id=None, limit=None):
+    global mqtt_client
+    if mqtt_client is None or not mqtt_connected.is_set():
+        logger.warning("[MQTT] No conectado aún; mqtt_select ignorado.")
+        return
+
     payload = {"request": request}
     if device is not None:
         payload["device"] = device
@@ -154,23 +193,19 @@ def mqtt_select(request, device=None, comp_id=None, limit=None):
     if limit is not None:
         payload["limit"] = int(limit)
 
+    logger.info("[MQTT][PUB] %s %s", TOPIC_SELECT, payload)
     mqtt_client.publish(TOPIC_SELECT, json.dumps(payload), qos=1)
 
 
 def mqtt_get(device, comp_type, comp_id):
+    global mqtt_client
+    if mqtt_client is None or not mqtt_connected.is_set():
+        logger.warning("[MQTT] No conectado aún; mqtt_get ignorado.")
+        return
+
     payload = {"device": device, "type": comp_type, "id": int(comp_id)}
+    logger.info("[MQTT][PUB] %s %s", TOPIC_GET, payload)
     mqtt_client.publish(TOPIC_GET, json.dumps(payload), qos=1)
-
-
-def normalize_bool_state(value):
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        v = value.strip().lower()
-        return v in ("1", "true", "on", "yes", "active", "enabled")
-    return False
 
 
 # =========================
@@ -179,7 +214,7 @@ def normalize_bool_state(value):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
-    touch_session(user.id, chat_id=chat_id)
+    update_user_session(user.id, chat_id=chat_id)
 
     app = context.application
     if "active_chats" not in app.bot_data:
@@ -188,9 +223,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "Bot de sistema:\n"
-        "- Sensores: inventario (BBDD) y lectura en tiempo real\n"
-        "- Actuadores: inventario (BBDD) y lectura en tiempo real\n"
-        "- Alertas: notify en tiempo real + consulta de BBDD\n"
+        "- Sensores: consulta de inventario y lectura en tiempo real\n"
+        "- Actuadores: consulta de inventario y lectura en tiempo real\n"
+        "- Alertas: notificaciones desde system/notify/alert\n\n"
+        f"MQTT service: {SERVICE_NAME}\n"
+        f"Escuchando: {TOPIC_RESPONSE_PREFIX}#\n"
     )
     await update.message.reply_text(text, reply_markup=build_main_keyboard())
 
@@ -198,8 +235,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "Guia rapida:\n"
-        "1) Sensores -> dispositivo -> sensor (lectura en tiempo real)\n"
-        "2) Actuadores -> dispositivo -> actuador (lectura en tiempo real)\n"
+        "1) Sensores -> eliges dispositivo -> eliges sensor (lectura en tiempo real)\n"
+        "2) Actuadores -> eliges dispositivo -> eliges actuador (lectura en tiempo real)\n"
         "3) Alertas -> consulta ultimas alertas en BBDD\n"
         "4) Actualizar -> refresca inventario desde BBDD\n"
     )
@@ -212,7 +249,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
-    touch_session(user.id, chat_id=chat_id)
+    update_user_session(user.id, chat_id=chat_id)
 
     text = (update.message.text or "").strip().lower()
 
@@ -240,15 +277,14 @@ async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_sensors_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    session = touch_session(user.id, chat_id=update.effective_chat.id)
+    session = get_user_session(user.id)
 
     if not device_cache["sensors"]:
         session["pending_requests"].add("sensors")
         await update.message.reply_text("Consultando sensores (BBDD)...")
-
         mqtt_select("sensors")
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
         menu = build_device_menu("sensors")
         await update.message.reply_text("Sensores disponibles:", reply_markup=menu)
         return
@@ -259,15 +295,14 @@ async def handle_sensors_request(update: Update, context: ContextTypes.DEFAULT_T
 
 async def handle_actuators_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    session = touch_session(user.id, chat_id=update.effective_chat.id)
+    session = get_user_session(user.id)
 
     if not device_cache["actuators"]:
         session["pending_requests"].add("actuators")
         await update.message.reply_text("Consultando actuadores (BBDD)...")
-
         mqtt_select("actuators")
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
         menu = build_device_menu("actuators")
         await update.message.reply_text("Actuadores disponibles:", reply_markup=menu)
         return
@@ -278,17 +313,16 @@ async def handle_actuators_request(update: Update, context: ContextTypes.DEFAULT
 
 async def handle_alerts_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    session = touch_session(user.id, chat_id=update.effective_chat.id)
-
+    session = get_user_session(user.id)
     session["pending_requests"].add("alerts")
-    await update.message.reply_text("Consultando alertas (BBDD)...")
 
+    await update.message.reply_text("Consultando alertas (BBDD)...")
     mqtt_select("alerts", limit=10)
 
 
 async def handle_refresh_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    session = touch_session(user.id, chat_id=update.effective_chat.id)
+    session = get_user_session(user.id)
 
     device_cache["sensors"].clear()
     device_cache["actuators"].clear()
@@ -301,7 +335,7 @@ async def handle_refresh_request(update: Update, context: ContextTypes.DEFAULT_T
     mqtt_select("sensors")
     mqtt_select("actuators")
 
-    await asyncio.sleep(1)
+    await asyncio.sleep(2)
     await update.message.reply_text(
         f"Actualizado.\nSensores: {len(device_cache['sensors'])} dispositivos\nActuadores: {len(device_cache['actuators'])} dispositivos",
         reply_markup=build_main_keyboard(),
@@ -317,21 +351,21 @@ async def handle_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     choice = query.data or ""
-    touch_session(user.id, chat_id=query.message.chat.id)
+    update_user_session(user.id, chat_id=query.message.chat.id)
 
     try:
         if choice.startswith("refresh|"):
             _, req_type = choice.split("|", 1)
             device_cache[req_type].clear()
             await query.edit_message_text("Actualizando inventario...")
-            mqtt_select(req_type)  # sensors/actuators
+            mqtt_select(req_type)
             return
 
         if choice.startswith("refresh_component|"):
             _, req_type, device = choice.split("|", 2)
             device_cache[req_type][device] = []
             await query.edit_message_text(f"Actualizando componentes de {device}...")
-            mqtt_select(req_type, device=device)  # inventario por dispositivo
+            mqtt_select(req_type, device=device)
             return
 
         if choice.startswith("device|"):
@@ -369,20 +403,28 @@ async def handle_submenu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MQTT RECEIVE
 # =========================
 def cache_add_component(req_type, device, data):
+    """
+    Inserta componentes en cache evitando duplicados por id.
+    Normaliza 'enable' -> 'enabled' para sensores.
+    """
+    data = normalize_inventory_payload(data)
+
     existing = device_cache[req_type].get(device, [])
-    new_id = int(data.get("id", -2))
-    if not any(int(e.get("id", -1)) == new_id for e in existing):
+    if not any(int(e.get("id", -1)) == int(data.get("id", -2)) for e in existing):
         device_cache[req_type].setdefault(device, []).append(data)
 
 
 def find_component_meta(req_type, device, comp_id):
+    """
+    Devuelve metadatos de un componente desde cache (nombre, ubicación y enabled).
+    """
     for item in device_cache[req_type].get(device, []):
         if int(item.get("id", -1)) == int(comp_id):
+            enabled_val = get_enabled_field(item, default=True)
             return {
                 "name": item.get("name"),
                 "location": item.get("location"),
-                "enabled": item.get("enabled", True),
-                "unit": item.get("unit"),
+                "enabled": enabled_val,
             }
     return {}
 
@@ -396,84 +438,84 @@ def on_message(client, userdata, msg):
         app = userdata.get("app")
         loop = userdata.get("loop")
 
-        # 1) Alertas asíncronas
+        logger.info("[MQTT][IN] %s %s", topic, payload_raw[:200])
+
         if topic == TOPIC_NOTIFY_ALERT:
             asyncio.run_coroutine_threadsafe(show_alert_notify(app, data), loop)
             return
 
-        # 2) Respuestas de este servicio
         if not topic.startswith(TOPIC_RESPONSE_PREFIX):
             return
 
-        tail = topic[len(TOPIC_RESPONSE_PREFIX):]  # e.g. "sensors/esp32/1"
+        tail = topic[len(TOPIC_RESPONSE_PREFIX):]
         parts = tail.split("/")
         if not parts:
             return
 
-        category = parts[0]  # sensors|actuators|alerts|devices|...
+        category = parts[0]
 
-        # ----- INVENTARIO sensores/actuadores desde BBDD -----
         if category in ("sensors", "actuators"):
-            # .../<table>/<device>/<id>
-            if len(parts) >= 3 and parts[2].isdigit():
-                device = parts[1]
-                cache_add_component(category, device, data)
-
-                asyncio.run_coroutine_threadsafe(
-                    notify_cache_update(app, category, device),
-                    loop,
-                )
-                return
-
-            # .../<table>/empty
+            # Esperado: <table>/<device>/<id>  OR  <table>/empty
             if len(parts) >= 2 and parts[1] == "empty":
-                logger.info(f"[CACHE] {category}: sin resultados")
+                logger.info("[CACHE] %s: sin resultados", category)
                 return
 
-            return
-
-        # ----- ALERTAS desde BBDD -----
-        if category == "alerts":
-            asyncio.run_coroutine_threadsafe(show_alert_row(app, data), loop)
-            return
-
-        # ----- DISPOSITIVOS desde BBDD (si lo usas) -----
-        if category == "devices":
-            asyncio.run_coroutine_threadsafe(show_devices_row(app, data), loop)
-            return
-
-        # ----- Respuestas tiempo real (si tu router las publica en system/response/<requester>/sensor/... ) -----
-        if category in ("sensor", "actuator"):
             if len(parts) < 3:
                 return
+
+            # Solo cachea si hay id numérico (evita respuestas parciales)
+            if not parts[2].isdigit():
+                return
+
+            device = parts[1]
+            data = normalize_inventory_payload(data)
+
+            cache_add_component(category, device, data)
+            asyncio.run_coroutine_threadsafe(notify_cache_update(app, category, device), loop)
+            return
+
+        if category in ("sensor", "actuator"):
+            # Esperado: <type>/<device>/<id>
+            if len(parts) < 3 or not parts[2].isdigit():
+                return
+
             device = parts[1]
             comp_id = int(parts[2])
 
             if category == "sensor":
                 meta = find_component_meta("sensors", device, comp_id)
+
+                # Si el payload de tiempo real incluye enable/enabled, lo usamos.
+                # Si no, usamos lo que haya en cache.
+                enabled_from_payload = get_enabled_field(data, default=None)
+                enabled_final = enabled_from_payload if enabled_from_payload is not None else meta.get("enabled", True)
+
                 merged = {
                     "device_name": device,
                     "id": comp_id,
                     "name": meta.get("name", f"Sensor {comp_id}"),
                     "location": meta.get("location", "N/A"),
-                    "enabled": meta.get("enabled", True),
+                    "enabled": enabled_final,
                     "value": data.get("value"),
-                    "unit": data.get("unit", meta.get("unit")),
+                    "unit": data.get("unit") or data.get("units"),
                 }
                 asyncio.run_coroutine_threadsafe(show_sensor_reading(app, merged), loop)
                 return
 
-            if category == "actuator":
-                meta = find_component_meta("actuators", device, comp_id)
-                merged = {
-                    "device_name": device,
-                    "id": comp_id,
-                    "name": meta.get("name", f"Actuator {comp_id}"),
-                    "location": meta.get("location", "N/A"),
-                    "state": data.get("state"),
-                }
-                asyncio.run_coroutine_threadsafe(show_actuator_state(app, merged), loop)
-                return
+            meta = find_component_meta("actuators", device, comp_id)
+            merged = {
+                "device_name": device,
+                "id": comp_id,
+                "name": meta.get("name", f"Actuator {comp_id}"),
+                "location": meta.get("location", "N/A"),
+                "state": data.get("state"),
+            }
+            asyncio.run_coroutine_threadsafe(show_actuator_state(app, merged), loop)
+            return
+
+        if category == "alerts":
+            asyncio.run_coroutine_threadsafe(show_alert_row(app, data), loop)
+            return
 
     except Exception as e:
         logger.error(f"[MQTT] Error procesando mensaje: {e}")
@@ -487,7 +529,7 @@ async def notify_cache_update(app, req_type, device_name):
         if req_type not in session.get("pending_requests", set()):
             continue
 
-        chat_id = session.get("chat_id")
+        chat_id = session.get("last_chat_id")
         if not chat_id:
             continue
 
@@ -503,6 +545,9 @@ async def notify_cache_update(app, req_type, device_name):
 
 
 async def show_sensor_reading(app, data):
+    enabled_bool = normalize_bool_state(data.get("enabled"))
+    enabled_txt = "1" if enabled_bool else "0"
+
     text = (
         "Lectura de sensor (tiempo real)\n\n"
         f"Dispositivo: {data.get('device_name')}\n"
@@ -510,7 +555,7 @@ async def show_sensor_reading(app, data):
         f"Ubicacion: {data.get('location')}\n"
         f"ID: {data.get('id')}\n"
         f"Valor: {data.get('value')} {data.get('unit') or ''}\n"
-        f"Enabled: {data.get('enabled')}\n"
+        f"Enabled: {enabled_txt}\n"
     )
     for chat_id in list(app.bot_data.get("active_chats", [])):
         try:
@@ -580,19 +625,6 @@ async def show_alert_row(app, data):
             logger.warning(f"Error enviando alerta(BBDD) a chat {chat_id}: {e}")
 
 
-async def show_devices_row(app, data):
-    text = (
-        "DISPOSITIVO (BBDD)\n\n"
-        f"Device: {data.get('device_name')}\n"
-        f"Last seen: {data.get('last_seen')}\n"
-    )
-    for chat_id in list(app.bot_data.get("active_chats", [])):
-        try:
-            await app.bot.send_message(chat_id=chat_id, text=text, reply_markup=build_main_keyboard())
-        except Exception as e:
-            logger.warning(f"Error enviando device(BBDD) a chat {chat_id}: {e}")
-
-
 # =========================
 # MQTT LOOP
 # =========================
@@ -601,6 +633,7 @@ def mqtt_loop(app, loop):
 
     while True:
         try:
+            mqtt_connected.clear()
             mqtt_client = mqtt.Client(userdata={"app": app, "loop": loop})
             mqtt_client.username_pw_set(MQTT_USER, MQTT_PASS)
 
@@ -610,6 +643,8 @@ def mqtt_loop(app, loop):
                     return
 
                 logger.info("[MQTT] Conectado")
+                mqtt_connected.set()
+
                 client.subscribe(f"{TOPIC_RESPONSE_PREFIX}#", qos=1)
                 client.subscribe(TOPIC_NOTIFY_ALERT, qos=1)
 
@@ -631,21 +666,24 @@ def mqtt_loop(app, loop):
 # =========================
 # MAIN
 # =========================
+async def post_init(app: Application) -> None:
+    loop = asyncio.get_running_loop()
+    mqtt_thread = threading.Thread(target=mqtt_loop, args=(app, loop), daemon=True)
+    mqtt_thread.start()
+    logger.info("MQTT thread iniciado desde post_init.")
+
+
 if __name__ == "__main__":
     if not TOKEN:
         raise RuntimeError("Falta TELEGRAM_API_KEY en variables de entorno")
 
     logger.info("Iniciando bot Telegram...")
 
-    application = Application.builder().token(TOKEN).build()
+    application = Application.builder().token(TOKEN).post_init(post_init).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu))
     application.add_handler(CallbackQueryHandler(handle_submenu))
-
-    loop = asyncio.get_event_loop()
-    mqtt_thread = threading.Thread(target=mqtt_loop, args=(application, loop), daemon=True)
-    mqtt_thread.start()
 
     application.run_polling()

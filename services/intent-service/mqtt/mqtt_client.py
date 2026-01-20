@@ -74,6 +74,15 @@ class MQTTClient:
                 f"[MQTT] Suscrito a {TOPICS['response_in']}"
             )
 
+            # Suscripción a eventos incrementales (announce)
+            client.subscribe(
+                TOPICS["notify_in"],
+                QOS["notify_in"]
+            )
+            logger.info(
+                f"[MQTT] Suscrito a {TOPICS['notify_in']}"
+            )
+
             # Solicitar snapshot inicial
             self.request_snapshot()
 
@@ -104,9 +113,13 @@ class MQTTClient:
             return
 
         # === Respuestas del router (snapshot / response) ===
-        if topic.startswith(
-            TOPICS["response_in"].rstrip("#")
-        ):
+        if mqtt.topic_matches_sub(TOPICS["response_in"], topic):
+            if self.on_response_cb:
+                self.on_response_cb(topic, payload)
+            return
+
+        # === Eventos incrementales (notify/announce) ===
+        if mqtt.topic_matches_sub(TOPICS["notify_in"], topic):
             if self.on_response_cb:
                 self.on_response_cb(topic, payload)
             return
