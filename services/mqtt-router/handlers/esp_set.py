@@ -4,12 +4,32 @@ from datetime import datetime
 from handlers.utils import safe_json_dumps
 
 
+def _normalize_bool(raw_cmd):
+    if isinstance(raw_cmd, str):
+        v = raw_cmd.strip().lower()
+        return v in ["1", "true", "on", "enabled", "yes", "active"]
+    return bool(raw_cmd)
+
+
+def _motion_bool_from_command(cmd: str) -> bool:
+    """
+    Para mantener compatibilidad con actuators.state (0/1).
+    OPEN/CLOSE => True (en movimiento/activo)
+    STOP/CLOSED/OFF => False
+    """
+    v = (cmd or "").strip().lower()
+    return v in ["open", "close", "forward", "backward", "opening", "closing", "up", "down"]
+
+
 def handle(db, client, topic, payload):
     """
     Gestiona 'system/set/#' desde los microservicios internos.
-    Valida datos, normaliza comandos a booleanos y reenvía la orden al ESP32.
+    Soporta:
+      - Actuadores simples:   payload.state (bool/str)
+      - Sensores:            payload.enable (bool/str)
+      - Actuadores movimiento: payload.command ("OPEN|CLOSE|STOP") + opcional payload.speed (0-100)
+    Reenvía la orden al ESP32 en set/<device>/<type>/<id>.
     """
-
     try:
         # === Identificar requester ===
         parts = topic.split("/")
@@ -22,16 +42,30 @@ def handle(db, client, topic, payload):
         comp_id = payload.get("id")
         comp_id = int(comp_id) if comp_id is not None else None
 
-        # Comando: state (actuadores) o enable (sensores)
-        raw_cmd = payload.get("state", payload.get("enable"))
+        # Comandos soportados
+        raw_state = payload.get("state", None)
+        raw_enable = payload.get("enable", None)
+        raw_command = payload.get("command", None)
+        raw_speed = payload.get("speed", None)
 
-        if not (device and comp_type and comp_id is not None and raw_cmd is not None):
+        if not (device and comp_type and comp_id is not None):
             logger.warning(f"[SYSTEM/SET] Petición incompleta -> {payload}")
             return
 
         if comp_type not in ["sensor", "actuator"]:
             logger.warning(f"[SYSTEM/SET] Tipo inválido: {comp_type}")
             return
+
+        # Validación mínima del comando según tipo
+        if comp_type == "sensor":
+            if raw_enable is None:
+                logger.warning(f"[SYSTEM/SET] Petición incompleta (sensor sin enable) -> {payload}")
+                return
+        else:
+            # actuator
+            if raw_state is None and raw_command is None:
+                logger.warning(f"[SYSTEM/SET] Petición incompleta (actuator sin state/command) -> {payload}")
+                return
 
         # === Comprobación de existencia en base de datos ===
         query = f"SELECT name, location FROM {comp_type}s WHERE device_name=%s AND id=%s"
@@ -56,23 +90,52 @@ def handle(db, client, topic, payload):
 
         # === Preparar payload para ESP32 ===
         esp_topic = f"set/{device}/{comp_type}/{comp_id}"
-        forward_payload = {
-            "requester": requester
-        }
+        forward_payload = {"requester": requester}
 
-        # === Normalización a booleanos ===
-        if isinstance(raw_cmd, str):
-            raw_cmd = raw_cmd.strip().lower()
-            value = raw_cmd in ["1", "true", "on", "enabled"]
-        else:
-            value = bool(raw_cmd)
+        command_for_db = None     # lo que persistimos en actuators.state (0/1)
+        notify_value = None       # lo que ponemos en system/notify/set
 
-        if comp_type == "actuator":
-            forward_payload["state"] = value
-            command = value
-        else:
+        # ==========================
+        # SENSOR: enable boolean
+        # ==========================
+        if comp_type == "sensor":
+            value = _normalize_bool(raw_enable)
             forward_payload["enable"] = value
-            command = value
+            command_for_db = None
+            notify_value = value
+
+        # ==========================
+        # ACTUATOR: state boolean (simple) o command/speed (movimiento)
+        # ==========================
+        else:
+            if raw_command is not None:
+                # Movimiento: reenviamos command + speed (si existe)
+                if not isinstance(raw_command, str) or not raw_command.strip():
+                    logger.warning(f"[SYSTEM/SET] command inválido -> {payload}")
+                    return
+
+                cmd = raw_command.strip().upper()
+                forward_payload["command"] = cmd
+
+                # Speed opcional (0-100)
+                if raw_speed is not None:
+                    try:
+                        speed = int(raw_speed)
+                        speed = max(0, min(100, speed))
+                        forward_payload["speed"] = speed
+                    except Exception:
+                        logger.warning(f"[SYSTEM/SET] speed inválido (se ignora) -> {raw_speed}")
+
+                # Para mantener compatibilidad en BBDD (0/1)
+                command_for_db = 1 if _motion_bool_from_command(cmd) else 0
+                notify_value = {"command": cmd, "speed": forward_payload.get("speed")}
+
+            else:
+                # Actuador simple ON/OFF
+                value = _normalize_bool(raw_state)
+                forward_payload["state"] = value
+                command_for_db = 1 if value else 0
+                notify_value = value
 
         # === Publicar al ESP32 (QoS 1) ===
         client.publish(
@@ -80,17 +143,17 @@ def handle(db, client, topic, payload):
             json.dumps(forward_payload),
             qos=1
         )
-        logger.info(f"[SET] Enviado -> {esp_topic} ({command})")
+        logger.info(f"[SET] Enviado -> {esp_topic} ({notify_value})")
 
         # === Actualizar BD (solo actuadores) ===
-        if comp_type == "actuator":
+        if comp_type == "actuator" and command_for_db is not None:
             db.execute(
                 """
                 UPDATE actuators
                 SET state=%s, last_seen=NOW()
                 WHERE device_name=%s AND id=%s
                 """,
-                (command, device, comp_id),
+                (command_for_db, device, comp_id),
                 commit=True
             )
 
@@ -108,7 +171,7 @@ def handle(db, client, topic, payload):
             "id": comp_id,
             "name": name,
             "location": location,
-            "value": command,
+            "value": notify_value,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "source": requester
         }
