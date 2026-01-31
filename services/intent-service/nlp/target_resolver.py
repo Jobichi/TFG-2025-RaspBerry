@@ -23,9 +23,11 @@ class TargetResolver:
 
         text_norm = text.lower()
 
-        if intent in (Intent.ON, Intent.OFF):
+        # Actuadores: ON/OFF + movimiento (persianas/puertas)
+        if intent in (Intent.ON, Intent.OFF, Intent.FORWARD, Intent.BACKWARD, Intent.STOP):
             return self._resolve_component(text_norm, "actuator")
 
+        # Sensores: ENABLE/DISABLE
         if intent in (Intent.ENABLE, Intent.DISABLE):
             return self._resolve_component(text_norm, "sensor")
 
@@ -71,14 +73,10 @@ class TargetResolver:
 
         if match:
             device, cid, comp = match
-            logger.info(
-                f"[TARGET] Fuzzy match {comp_type} -> {device}/{cid}"
-            )
+            logger.info(f"[TARGET] Fuzzy match {comp_type} -> {device}/{cid}")
             return self._build_target(device, comp_type, cid, comp)
 
-        logger.warning(
-            f"[TARGET] No se pudo resolver {comp_type} para texto: '{text}'"
-        )
+        logger.warning(f"[TARGET] No se pudo resolver {comp_type} para texto: '{text}'")
         return None
 
     # ==========================================================
@@ -130,9 +128,7 @@ class TargetResolver:
         comp_id: int,
         data: dict
     ) -> dict:
-        logger.info(
-            f"[TARGET] Objetivo resuelto -> {comp_type} {device}/{comp_id}"
-        )
+        logger.info(f"[TARGET] Objetivo resuelto -> {comp_type} {device}/{comp_id}")
         return {
             "device": device,
             "type": comp_type,

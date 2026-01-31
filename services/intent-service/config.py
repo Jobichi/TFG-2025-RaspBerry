@@ -28,6 +28,10 @@ TOPICS = {
     # Respuestas del router al requester (snapshot / respuestas GET/SET)
     "response_in": os.getenv("MQTT_RESPONSE_IN_TOPIC", f"system/response/{SERVICE_NAME}/#"),
 
+    # Eventos incrementales de dispositivos (altas/bajas/estado)
+    # Ejemplo: system/notify/esp32_salon/announce
+    "notify_in": os.getenv("MQTT_NOTIFY_IN_TOPIC", "system/notify/+/announce"),
+
     # Salida: comandos al router (SET)
     "set_out": os.getenv("MQTT_SET_OUT_TOPIC", f"system/set/{SERVICE_NAME}"),
 }
@@ -39,6 +43,7 @@ QOS = {
 
     # Snapshot y respuestas: recomendado QoS 1
     "response_in": int(os.getenv("MQTT_QOS_RESPONSE_IN", "1")),
+    "notify_in": int(os.getenv("MQTT_QOS_NOTIFY_IN", "1")),
     "select_req": int(os.getenv("MQTT_QOS_SELECT_REQ", "1")),
 
     # Comandos SET: recomendado QoS 1
@@ -48,9 +53,6 @@ QOS = {
 # =========================
 #  SNAPSHOT / MEMORIA
 # =========================
-# Tiempo máximo recomendado para esperar a que llegue el snapshot antes de procesar STT
-SNAPSHOT_TIMEOUT_S = int(os.getenv("SNAPSHOT_TIMEOUT_S", "10"))
-
 # Si quieres exigir snapshot antes de procesar transcripciones
 REQUIRE_SNAPSHOT = os.getenv("REQUIRE_SNAPSHOT", "true").strip().lower() in ("1", "true", "yes", "on")
 
