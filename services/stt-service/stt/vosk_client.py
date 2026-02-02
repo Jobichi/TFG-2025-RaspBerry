@@ -1,11 +1,6 @@
-# vosk_client.py
-# Implementación concreta del cliente STT utilizando un servicio Vosk vía WebSocket.
-#
-# La clase VoskClient implementa la interfaz STTClient y permite que el
-# servicio de transcripción interactúe con Vosk sin conocer su funcionamiento
-# interno. El envío se realiza en chunks pequeños para simular streaming, y el
-# cliente recoge los resultados devueltos por el backend STT hasta obtener el texto final.
-
+# ============================
+# stt-service/stt/vosk_client.py
+# ============================
 import asyncio
 import json
 import websockets
@@ -17,31 +12,23 @@ from config import VOSK_WS
 class VoskClient(STTClient):
     """
     Cliente STT que se conecta a un microservicio Vosk mediante WebSocket.
+
+    Flujo:
+    - Envía PCM en chunks.
+    - Envía EOF.
+    - Recibe un único JSON de respuesta con el texto final.
     """
 
     async def process_audio(self, pcm_data: bytes) -> str:
-        """
-        Envía el audio PCM al microservicio Vosk y obtiene la transcripción final.
-
-        :param pcm_data: Audio PCM 16-bit.
-        :return: Texto reconocido por el modelo Vosk.
-        """
         try:
             async with websockets.connect(VOSK_WS) as ws:
                 await self._send_pcm(ws, pcm_data)
-                text = await self._receive_results(ws)
-                return text
+                return await self._receive_final(ws)
         except Exception as e:
             print(f"[VOSK][ERROR] Fallo en comunicación con Vosk: {e}")
             return ""
 
     async def _send_pcm(self, ws, pcm_data: bytes) -> None:
-        """
-        Envía el audio en pequeños bloques para simular transmisión progresiva.
-
-        :param ws: Conexión WebSocket activa.
-        :param pcm_data: Datos PCM en bruto.
-        """
         chunk_size = 4000
         total = len(pcm_data)
         total_chunks = (total + chunk_size - 1) // chunk_size
@@ -56,31 +43,23 @@ class VoskClient(STTClient):
             await asyncio.sleep(0.01)
 
         await ws.send('{"eof": 1}')
-        print("[VOSK] Audio enviado completamente.")
+        print("[VOSK] Audio enviado completamente (EOF).")
 
-    async def _receive_results(self, ws) -> str:
+    async def _receive_final(self, ws) -> str:
         """
-        Recibe los mensajes devueltos por Vosk hasta obtener el texto final.
-
-        :param ws: Conexión WebSocket activa.
-        :return: Texto reconocido.
+        Recibe una única respuesta JSON del servidor.
+        Soporta:
+        - Wrapper: {"final": true, "text": "...", "raw": {...}}
+        - Directo: {"text": "..."}
         """
-        final_text = ""
+        message = await ws.recv()
 
-        async for message in ws:
-            try:
-                data = json.loads(message)
-            except json.JSONDecodeError:
-                print(f"[VOSK][WARN] Respuesta no válida: {message}")
-                continue
+        try:
+            data = json.loads(message)
+        except json.JSONDecodeError:
+            print(f"[VOSK][WARN] Respuesta no válida: {message}")
+            return ""
 
-            text = data.get("text", "").strip()
-            if text:
-                final_text = text
-                print(f"[VOSK] Parcial: {text}")
-
-            if data.get("final") or data.get("partial", "") == "":
-                break
-
-        print(f"[VOSK] Texto final: {final_text}")
-        return final_text
+        text = str(data.get("text", "")).strip()
+        print(f"[VOSK] Texto final: {text}")
+        return text

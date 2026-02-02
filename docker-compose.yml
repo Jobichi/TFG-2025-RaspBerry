@@ -148,10 +148,8 @@ services:
       VOSK_SAMPLE_RATE: 16000
       TZ: Europe/Madrid
     volumes: # Descomentar el que se quiere usar y comentar el otro.
-      - ./models/es/vosk/vosk-model-es-0.42:/models/vosk
-      # - ./models/vosk-es/vosk-model-small-es-0.42:/models/vosk
-    depends_on:
-      - mosquitto
+      #- ./models/es/vosk/vosk-model-es-0.42:/models/vosk
+      - ./models/es/vosk/vosk-model-small-es-0.42:/models/vosk
     networks:
       - tfg_net
 
